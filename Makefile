@@ -1,5 +1,9 @@
 STUID = ysyx_22040000
-STUNAME = 张三
+STUNAME = 李未尧
+VERILATOR = verilator
+VERILATOR_FLAGS = --cc --exe --build -j 0 -Wall --trace-fst
+
+
 
 # DO NOT modify the following code!!!
 
@@ -42,3 +46,4 @@ _default:
 	@echo "Please run 'make' under subprojects."
 
 .PHONY: .git_commit .clean_index _default
+
