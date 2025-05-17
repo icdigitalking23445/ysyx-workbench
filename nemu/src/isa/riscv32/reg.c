@@ -24,8 +24,34 @@ const char *regs[] = {
 };
 
 void isa_reg_display() {
+  printf("==== Register State ====\n");
+  for (int i = 0; i < 32; i++) {
+    printf("%3s: 0x%08x", regs[i], cpu.gpr[i]);
+    if ((i + 1) % 4 == 0) printf("\n"); 
+    else printf("   ");
+  }
+  printf("  pc: 0x%08x\n", cpu.pc);  
 }
 
+
 word_t isa_reg_str2val(const char *s, bool *success) {
+   // 先把默认设成失败
+  *success = false;
+
+  // 处理 pc
+  if (strcmp(s, "pc") == 0) {
+    *success = true;
+    return cpu.pc;
+  }
+
+  // 遍历 gpr
+  for (int i = 0; i < 32; i++) {
+    if (strcmp(s, regs[i]) == 0) {
+      *success = true;
+      return cpu.gpr[i];
+    }
+  }
+
+  // 都没匹配上
   return 0;
 }

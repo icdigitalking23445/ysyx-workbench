@@ -19,6 +19,11 @@
 #include <time.h>
 #include <assert.h>
 #include <string.h>
+static void gen_rand_expr();
+static void gen_num();
+static void gen_rand_op();
+static void gen(char c);
+static int choose(int n);
 
 // this should be enough
 static char buf[65536] = {};
@@ -30,11 +35,55 @@ static char *code_format =
 "  printf(\"%%u\", result); "
 "  return 0; "
 "}";
+static int buf_len = 0;
 
 static void gen_rand_expr() {
-  buf[0] = '\0';
-}
+	if (buf_len > 5000) return;  // 防止表达式生成太长
 
+switch (choose(3)) {
+    case 0: gen_num(); break;
+case 1: gen('('); gen_rand_expr(); gen(')'); break;   
+		default: 
+gen_rand_expr();    
+gen_rand_op();      
+gen_rand_expr();    				
+				break;
+}
+}
+static void gen(char c) {
+  if (buf_len < (int)sizeof(buf) - 1) {
+    buf[buf_len] = c;
+		buf_len++;
+    buf[buf_len] = '\0';
+
+  }
+}
+static void gen_num() {
+	int n = rand() % 100;
+
+ char num[16];
+sprintf(num, "%u", n);
+
+  
+  for (int i = 0; num[i] != '\0'; i++) {
+   gen(num[i]);
+  }
+ 
+}
+static void gen_rand_op() {
+  const char ops[] = "+-*/";
+  char op = ops[rand() % 4];
+
+  // 随机可能在运算符前加空格
+  if (rand() % 2 == 0) gen(' ');
+
+  // 输出运算符
+  gen(op);
+
+}
+static int choose(int n) {
+  return rand() % n;
+}
 int main(int argc, char *argv[]) {
   int seed = time(0);
   srand(seed);
@@ -43,27 +92,34 @@ int main(int argc, char *argv[]) {
     sscanf(argv[1], "%d", &loop);
   }
   int i;
+	 
   for (i = 0; i < loop; i ++) {
+		 buf[0] = '\0';
+  buf_len = 0;
     gen_rand_expr();
 
     sprintf(code_buf, code_format, buf);
 
     FILE *fp = fopen("/tmp/.code.c", "w");
     assert(fp != NULL);
-    fputs(code_buf, fp);
+    fputs(code_buf, fp);//向code.c写入code_fomat
     fclose(fp);
 
-    int ret = system("gcc /tmp/.code.c -o /tmp/.expr");
-    if (ret != 0) continue;
+  int  ret = system("gcc /tmp/.code.c -o /tmp/.expr");//相当于在终端输入system里面的东西“gcc .....”
+    if (ret != 0){
+			continue;}
+	 ret = system("/tmp/.expr > /tmp/.output");
+if(ret != 0) continue;	
+    FILE *fp1 = fopen("/tmp/.output", "r");
+if (fp1 == NULL)
+    continue;
+   
 
-    fp = popen("/tmp/.expr", "r");
-    assert(fp != NULL);
+   int result;
+    ret = fscanf(fp1, "%d", &result);//写到result里
+   fclose(fp1);
 
-    int result;
-    ret = fscanf(fp, "%d", &result);
-    pclose(fp);
-
-    printf("%u %s\n", result, buf);
+     printf("%u %s\n", result, buf);
   }
   return 0;
 }

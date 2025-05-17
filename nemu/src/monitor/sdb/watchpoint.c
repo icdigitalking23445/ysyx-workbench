@@ -17,13 +17,15 @@
 
 #define NR_WP 32
 
-typedef struct watchpoint {
+/*typedef struct watchpoint {
   int NO;
   struct watchpoint *next;
+	word_t old_val;
+	char expr[128];
 
-  /* TODO: Add more members if necessary */
+  * TODO: Add more members if necessary *
 
-} WP;
+} WP;*/
 
 static WP wp_pool[NR_WP] = {};
 static WP *head = NULL, *free_ = NULL;
@@ -36,8 +38,88 @@ void init_wp_pool() {
   }
 
   head = NULL;
-  free_ = wp_pool;
+  free_ = wp_pool;//这里指的是free是指向pool中的第一个wp
 }
 
 /* TODO: Implement the functionality of watchpoint */
+WP* new_wp(){
+if(free_ == NULL){
+	printf("No more watch point free.");
+	assert(0);	
+}
+ WP *wp = free_;
+ free_ = free_->next;
+ wp->next = head;
+ head = wp;
+return wp;
+}
+void free_wp(int no){
+	WP *wp=NULL;
+	WP *cur;
+	for (cur=head;cur != NULL;cur=cur->next){
+	if(cur->NO == no){
+			wp=cur;
+			break;
+		}
+	}
+	
 
+ if(head == wp){
+ head = wp->next;
+ }
+ else {
+ WP *prev = head;
+ while (prev && prev->next != wp ){
+ prev = prev-> next;
+ }
+ if (prev){
+ prev->next = wp->next;
+ }else{
+ printf("Cannot found wp.");	 
+ }
+ }
+wp->next = free_;
+free_ = wp;
+}
+
+void info_watchpoints(void) {
+  if (head == NULL) {
+    printf("No watchpoints currently set.\n");
+    return;
+  }
+
+  printf("Active watchpoints:\n");
+  printf("%-8s %-20s %-10s\n", "NO", "Expression", "Value");
+
+  WP *wp = head;
+  while (wp != NULL) {
+    printf("%-8d %-20s %-10u (0x%x)\n", wp->NO, wp->expr, wp->old_val, wp->old_val);
+    wp = wp->next;
+  }
+}
+bool check_watchpoints() {
+  WP *wp = head;
+  bool triggered = false;
+
+  while (wp != NULL) {
+    bool success = true;
+    word_t new_val = expr(wp->expr, &success);
+
+    if (!success) {
+      wp = wp->next;
+      continue;
+    }
+
+    if (new_val != wp->old_val) {
+      printf("Watchpoint %d triggered: %s\n", wp->NO, wp->expr);
+      printf("  Old value = %u (0x%x)\n", wp->old_val, wp->old_val);
+      printf("  New value = %u (0x%x)\n", new_val, new_val);
+      wp->old_val = new_val;
+      triggered = true;
+    }
+
+    wp = wp->next;
+  }
+
+  return triggered;
+}
