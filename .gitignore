@@ -12,4 +12,5 @@
 !init.sh
 /nvboard
 /fceux-am
+/test_our
 verilator/

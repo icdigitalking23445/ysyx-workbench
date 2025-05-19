@@ -27,7 +27,7 @@ typedef struct watchpoint {
 word_t expr(char *e, bool *success);
 void init_wp_pool(void);              // 初始化监视点池
 WP* new_wp(void);                     // 分配一个监视点
-void free_wp(int no);                 // 删除监视点（根据编号）
+bool free_wp(int no);                 // 删除监视点（根据编号）
 void info_watchpoints(void);         // 打印所有监视点
 bool check_watchpoints(void);
 

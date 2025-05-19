@@ -96,14 +96,18 @@ static bool make_token(char *e) {//将字符串e变成tokens
   regmatch_t pmatch;//存储地址，相对于起点的偏移量。rm_so起始位置，rm_eo，结束位置
 
   nr_token = 0;//现在token从0开始
-
+/*regcomp做编译，把编译好的rules存到re[i]中
+ *regexec是把编译好的re[i]和char e+position做一个匹配，匹配成功记录i，i对应rules中的type，这时候就可以知道type
+ *然后最后根据情况把e的值做转换然后写入tokens的value中
+ *nr_token是token数组的长度。
+ */
   while (e[position] != '\0') {
     /* Try all rules one by one. */
 		bool matched = false;
     for (i = 0; i < NR_REGEX; i ++) {
       if (regexec(&re[i], e + position, 1, &pmatch, 0) == 0 && pmatch.rm_so == 0) {
         char *substr_start = e + position;//每个str开始的位置
-        int substr_len = pmatch.rm_eo;//每个str的长度
+        int substr_len = pmatch.rm_eo;//每个str的长度。eo，so都是相对位置，so永远为0.
 				
         Log("match rules[%d] = \"%s\" at position %d with len %d: %.*s",
             i, rules[i].regex, position, substr_len, substr_len, substr_start);

@@ -52,18 +52,31 @@ if(free_ == NULL){
  wp->next = head;
  head = wp;
 return wp;
-}
-void free_wp(int no){
+}//free变为下一个free的，wp变为free_(free是指向free的表的第一个节点。)，head变为wp,用作第一个，wp的下一个变成head
+ void free_wp_(WP *wp);
+bool free_wp(int no){
 	WP *wp=NULL;
 	WP *cur;
+	if(head == NULL){
+	printf("No working watchpoint right now\n");
+	return false;
+	}else{
 	for (cur=head;cur != NULL;cur=cur->next){
 	if(cur->NO == no){
 			wp=cur;
+			free_wp_(wp);
+			return true;
 			break;
+		}else if(cur->next == NULL){
+		printf("cannot find watch piont.\n");
+		return false;
 		}
 	}
-	
-
+	}
+	return false;
+}
+	//遍历head表，no匹配上了就记录下当前的wp
+void free_wp_(WP *wp){
  if(head == wp){
  head = wp->next;
  }
@@ -74,14 +87,13 @@ void free_wp(int no){
  }
  if (prev){
  prev->next = wp->next;
- }else{
- printf("Cannot found wp.");	 
  }
  }
 wp->next = free_;
 free_ = wp;
 }
 
+//然后做删除
 void info_watchpoints(void) {
   if (head == NULL) {
     printf("No watchpoints currently set.\n");

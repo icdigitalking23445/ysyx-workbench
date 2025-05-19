@@ -86,7 +86,8 @@ static int cmd_x(char *args) {
 																			的地址，strtok(NULL,)的时候就会调用这
 																			个分割副的地址
 																			*/
-  char *addr_str = strtok(NULL, " ");
+  char *addr_str = strtok(NULL, " ");//分割后第一个就是要读取的字符
+																		 //第二个就是要读的地址。
 
   if (num_str == NULL || addr_str == NULL) {
     printf("Usage: x N EXPR\n");
@@ -113,6 +114,7 @@ static int cmd_q(char *args) {nemu_state.state = NEMU_QUIT;
   return -1;
 	
 }
+#ifdef CONFIG_WATCHPOINT
 static int cmd_watch(char *args){
 //TODO:输入字符分割：watch <expr>，读取expr,存入wp->e
  if (args == NULL) {
@@ -141,10 +143,15 @@ if (args == NULL) {
     return 0;
   }
 int no = strtoul(args,NULL,10);
-free_wp(no);
+bool success = free_wp(no);
+if(success){
 printf("Deleted watchpoint %d\n", no);
 return 0;
 }
+else{
+return 0;}
+}
+#endif
 static int cmd_help(char *args);
 
 static struct {
@@ -158,8 +165,10 @@ static struct {
   {"si","Step execute", cmd_si},
 	{"info","Print information about reg or watch point",cmd_info},
 	{"x","Print memory from address",cmd_x},
+#ifdef CONFIG_WATCHPOINT
 	{"watch","Set Watch Point",cmd_watch},
 	{"delete","delete the watch point",cmd_delete}
+#endif	
   /* TODO: Add more commands */
 
 };
@@ -226,7 +235,7 @@ void sdb_mainloop() {
         break;
       }
     }
-
+//第i位名字碰上了就传入args给相应的handler。
     if (i == NR_CMD) { printf("Unknown command '%s'\n", cmd); }
   }
 }
@@ -234,7 +243,8 @@ void sdb_mainloop() {
 void init_sdb() {
   /* Compile the regular expressions. */
   init_regex();
-
+#ifdef CONFIG_WATCHPOINT
   /* Initialize the watchpoint pool. */
   init_wp_pool();
+#endif	
 }

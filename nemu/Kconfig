@@ -160,6 +160,13 @@ config DIFFTEST
     Enable differential testing with a reference design.
     Note that this will significantly reduce the performance of NEMU.
 
+config WATCHPOINT
+	bool "Enable WatchPiont function"
+	default n
+	help
+		Enable WatchPiont for set or delete.
+
+
 choice
   prompt "Reference design"
   default DIFFTEST_REF_SPIKE if ISA_riscv
