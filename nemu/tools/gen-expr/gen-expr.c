@@ -62,7 +62,7 @@ static void gen_num() {
 	int n = rand() % 100;
 
  char num[16];
-sprintf(num, "%u", n);
+sprintf(num, "%u", n);//num 以uint形式被n赋值
 
   
   for (int i = 0; num[i] != '\0'; i++) {
@@ -89,27 +89,27 @@ int main(int argc, char *argv[]) {
   srand(seed);
   int loop = 1;
   if (argc > 1) {
-    sscanf(argv[1], "%d", &loop);
+    sscanf(argv[1], "%d", &loop);//argv[1] int形式传入loop中，loop几次
   }
   int i;
 	 
   for (i = 0; i < loop; i ++) {
-		 buf[0] = '\0';
+		 buf[0] = '\0';//初始化
   buf_len = 0;
-    gen_rand_expr();
+    gen_rand_expr();//生成表达式
+//前面gen()从buf_len开始写，loop会把上一次的覆盖(因为初始化了)
+    sprintf(code_buf, code_format, buf);//buf中的内容写到code_buf中
 
-    sprintf(code_buf, code_format, buf);
-
-    FILE *fp = fopen("/tmp/.code.c", "w");
+    FILE *fp = fopen("/tmp/.code.c", "w");//创建并打开一个文档code.c
     assert(fp != NULL);
     fputs(code_buf, fp);//向code.c写入code_fomat
     fclose(fp);
 
   int  ret = system("gcc /tmp/.code.c -o /tmp/.expr");//相当于在终端输入system里面的东西“gcc .....”
     if (ret != 0){
-			continue;}
+			continue;}//直接进入下次循环（也就是编译不通过）
 	 ret = system("/tmp/.expr > /tmp/.output");
-if(ret != 0) continue;	
+if(ret != 0) continue;//如果运行报错，那么大概率是除以0,直接下次循环	
     FILE *fp1 = fopen("/tmp/.output", "r");
 if (fp1 == NULL)
     continue;
@@ -119,7 +119,7 @@ if (fp1 == NULL)
     ret = fscanf(fp1, "%d", &result);//写到result里
    fclose(fp1);
 
-     printf("%u %s\n", result, buf);
+     printf("%u %s\n", result, buf);//不会打印残留，遇到\0就停下来了。
   }
   return 0;
 }
