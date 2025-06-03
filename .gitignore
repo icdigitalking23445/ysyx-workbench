@@ -6,7 +6,7 @@
 !/nanos-lite/*
 !/navy-apps/*
 !/npc/*
-!/npc-chisel/*
+!/chisel-npc/*
 !Makefile
 !README.md
 !.gitignore
