@@ -7,13 +7,14 @@ val io = IO (new  Bundle {
     val instruction = Input(UInt(32.W)) // Input instruction
     val pc = Output(UInt(32.W)) // Program counter
   })
-  val pc = RegInit(0x80000000.U(32.W)) // Initialize program counter to 0x80000000
-  val pc_snpc = Wire(pc + 4.U) // static next program counter
-  val pc_dnpc = RegInit(0x80000000.U(32.W)) // Wire for dynamic next program counter
+
+  val pc = RegInit("h80000000".U(32.W)) // Initialize program counter to 0x80000000
+  val pc_snpc = pc + 4.U // static next program counter
+  val pc_dnpc = RegInit("h80000000".U(32.W)) // Wire for dynamic next program counter
   //      "000"=R-type, "001"=I-Load, "010"=S-Store,
   //      "011"=B-Branch, "100"=I-calculate(ADDI…), "101"=U-type(LUI/AUIPC),
   //      "110"=JAL, "111"=JALR
-  
+  io.pc := pc // Output the current program counter
   val wen       = WireDefault(false.B)
   val writeData = WireDefault(0.U(32.W))
 
@@ -23,7 +24,10 @@ val io = IO (new  Bundle {
   val idu = Module(new IDU())
   val regFile = Module(new RegFile())
   val exu = Module(new EXU())
-
+  val dpiHandlers = Module(new DPIHandlers())
+  // Connect IDU outputs to DPIHandlers inputs
+  dpiHandlers.io.IsIllegal   := idu.io.IsIllegal
+  dpiHandlers.io.IsInterrupt := idu.io.IsInterrupt
   //Connect IDU outputs to EXU inputs
   idu.io.instruction := io.instruction
   exu.io.funct3 := idu.io.funct3
@@ -38,41 +42,46 @@ val io = IO (new  Bundle {
   regFile.io.rs1 := idu.io.rs1
   regFile.io.rs2 := idu.io.rs2
   regFile.io.rd := idu.io.rd
-  //RegFile write data and enable
-  val isBranch = (idu.io.TYpe === "b011".U)
-  val isStore  = (idu.io.TYpe === "b010".U)
-  val isJal    = (idu.io.TYpe === "b110".U)
-  val isJalr   = (idu.io.TYpe === "b111".U)
- when (isStore || isBranch) {
-    // Store/Branch 不写寄存器
-    wen := false.B
-  } .elsewhen (isJal || isJalr) {
-    // JAL / JALR: 写 rd = exu.io.jump_target
-    wen        := true.B
-    writeData  := exu.io.jump_target
-  } .otherwise {
-    // 其余类型（R / I-Load / I-arith / U-type）写回 exu.io.result_out
-    wen        := true.B
-    writeData  := exu.io.result_out
-  }
-//PC update logic
-val pc_next = Wire(UInt(32.W))
-  when (isBranch) {
-    // Branch: 若 exu.io.branch_taken = 1，跳到 exu.io.branch_target；否则顺序 +4
-    pc_next := Mux(exu.io.branch_taken, exu.io.branch_target, pc_snpc)
-  } .elsewhen (isJalr) {
-    // JALR: 跳转到 exu.io.jump_target
-    pc_next := exu.io.jump_target
-  } .elsewhen (isJal) {
-    // JAL: 跳转到 exu.io.jump_target
-    pc_next := exu.io.jump_target
-  } .otherwise {
-    // 其余：顺序 +4
-    pc_next := pc_snpc
-  }
+  regFile.io.writeEnable := wen
+  regFile.io.writeData   := writeData
 
-  // 写回 PC
-  pc := pc_next
+  //RegFile write data and enable
+  val isBranch = (idu.io.TYpe === "b0011".U)
+  val isStore  = (idu.io.TYpe === "b0010".U)
+  val isJal    = (idu.io.TYpe === "b0110".U)
+  val isJalr   = (idu.io.TYpe === "b0111".U)
+  
+
+//   Branch/Store/ebreak/unknown instruction → false；其它 → true
+ wen:= (!isBranch && !isStore && !idu.io.IsIllegal && !idu.io.IsInterrupt)
+//   如果是 JAL/JALR → exu.io.jump_target
+//   否则           → exu.io.result_out
+writeData:= Mux(
+  isJal || isJalr,
+  exu.io.jump_target,
+  exu.io.result_out
+)
+//PC update logic
+// 先计算一个“Branch 分支里要用的 Mux”：
+//   如果分支条件成立 → exu.io.branch_target， 否则 → pc_snpc
+val branchPath: UInt =
+  Mux(exu.io.branch_taken, exu.io.branch_target, pc_snpc)
+
+// 再用嵌套 Mux 依次判断 isBranch / isJalr / isJal / 其余
+val pc_next: UInt = MuxLookup(idu.io.TYpe, pc_snpc, Seq(
+  // “b011” = Branch
+  "b0011".U -> branchPath,
+
+  // “b111” = JALR
+  "b0111".U -> exu.io.jump_target,
+
+  // “b110” = JAL
+  "b0110".U -> exu.io.jump_target
+
+  // 其它情况全部走 “pc_snpc” —— default 已经给定
+))
+
+pc := pc_next
 
 
 }

@@ -151,7 +151,7 @@ class ALU extends Module {
   val io = IO(new Bundle {
     val funct3   = Input(UInt(3.W))
     val funct7   = Input(UInt(7.W))
-    val TYpe     = Input(UInt(3.W))   // 3-bit: 000..111
+    val TYpe     = Input(UInt(4.W))   
     val reg_rs1  = Input(UInt(32.W))
     val reg_rs2  = Input(UInt(32.W))
     val imm      = Input(UInt(32.W))
@@ -171,7 +171,7 @@ class ALU extends Module {
   val shftr  = Module(new Shifter)
   shftr.io.in     := io.reg_rs1
   shftr.io.shamt  := io.reg_rs2(4, 0)
-  shftr.io.funct3 := "b001".U
+  shftr.io.funct3 := io.funct3
   shftr.io.funct7 := io.funct7
 
   val logicU = Module(new LogicUnit)
@@ -220,7 +220,7 @@ class ALU extends Module {
   uunit.io.imm     := io.imm
   uunit.io.pc      := io.pc
   // isAuipc 由外层决定，ALU 里只用 uunit.out
-
+  uunit.io.isAuipc := (io.TYpe === "b0101".U)  // U-type 的 AUIPC
   // 最终输出 result 先给一个默认
   val defaultRes = Wire(UInt(32.W))
   defaultRes := 0.U
@@ -229,14 +229,14 @@ class ALU extends Module {
   // TYpe: 000=R-type, 001=I-load, 010=S-store, 011=B-branch, 
   //       100=I-arith/JALR, 101=U-type, 110=JAL, 111=JALR
   io.result := MuxLookup(io.TYpe, 0.U, Seq(
-    "b000".U -> rtypeRes,        // R-type 运算结果
-    "b001".U -> addrAdd.io.sum,  // Load 地址
-    "b010".U -> addrAdd.io.sum,  // Store 地址
-    "b011".U -> 0.U,             // Branch 条件放在 BranchUnit
-    "b100".U -> itypeRes,        // I-arith（ADDI…），JALR 交给 JumpUnit
-    "b101".U -> uunit.io.out,    // U-type
-    "b110".U -> 0.U,             // JAL 交给 JumpUnit
-    "b111".U -> 0.U              // JALR 交给 JumpUnit
+    "b0000".U -> rtypeRes,        // R-type 运算结果
+    "b0001".U -> addrAdd.io.sum,  // Load 地址
+    "b0010".U -> addrAdd.io.sum,  // Store 地址
+    "b0011".U -> 0.U,             // Branch 条件放在 BranchUnit
+    "b0100".U -> itypeRes,        // I-arith（ADDI…），JALR 交给 JumpUnit
+    "b0101".U -> uunit.io.out,    // U-type
+    "b0110".U -> 0.U,             // JAL 交给 JumpUnit
+    "b0111".U -> 0.U              // JALR 交给 JumpUnit
   ))
 }
 
@@ -246,7 +246,7 @@ class EXU extends Module {
     val funct3        = Input(UInt(3.W))
     val funct7        = Input(UInt(7.W))
     val imm           = Input(SInt(12.W))
-    val TYpe          = Input(UInt(3.W))      // 3-bit
+    val TYpe          = Input(UInt(4.W))      // 4-bit
     val reg_rs1       = Input(UInt(32.W))
     val reg_rs2       = Input(UInt(32.W))
     val pc            = Input(UInt(32.W))
@@ -281,8 +281,8 @@ class EXU extends Module {
   jumpUnit.io.pc    := io.pc
   jumpUnit.io.rs1   := io.reg_rs1
   jumpUnit.io.imm   := io.imm.asUInt
-  jumpUnit.io.isJal := (io.TYpe === "b110".U)
-  jumpUnit.io.isJalr:= (io.TYpe === "b111".U)
+  jumpUnit.io.isJal := (io.TYpe === "b0110".U)
+  jumpUnit.io.isJalr:= (io.TYpe === "b0111".U)
 
   // —— 4. 输出赋值
   io.result_out    := alu.io.result
@@ -291,16 +291,16 @@ class EXU extends Module {
   io.jump_target   := 0.U
 
   switch(io.TYpe) {
-    is("b011".U) { // B-type
+    is("b0011".U) { // B-type
       io.branch_taken  := branchUnit.io.taken
       io.branch_target := branchUnit.io.branch_target
       io.result_out    := branchUnit.io.taken.asUInt // 如果需要也可将 0/1 放 result_out
     }
-    is("b110".U) { // JAL
+    is("b0110".U) { // JAL
       io.jump_target := jumpUnit.io.jump_pc
       io.result_out  := jumpUnit.io.jump_pc        // result_out 也可以放跳转目标
     }
-    is("b111".U) { // JALR
+    is("b0111".U) { // JALR
       io.jump_target := jumpUnit.io.jump_pc
       io.result_out  := jumpUnit.io.jump_pc
     }
