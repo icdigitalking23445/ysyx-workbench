@@ -1,5 +1,6 @@
 # Makefile for AbstractMachine Kernels and Libraries
-
+NEMU_BIN  ?= $(NEMU_HOME)/build/riscv32-nemu-interpreter
+NEMU_BATCH_FLAGS ?= -b
 ### *Get a more readable version of this Makefile* by `make html` (requires python-markdown)
 html:
 	cat Makefile | sed 's/^\([^#]\)/    \1/g' | markdown_py > Makefile.html
@@ -148,6 +149,10 @@ archive: $(ARCHIVE)
 image-dep: $(LIBS) $(IMAGE).elf
 .NOTPARALLEL: image-dep
 .PHONY: image image-dep archive run $(LIBS)
+
+#run: image
+#	@echo "# makefile batch starting NEMU,image file :$(IMAGE).elf"
+#	@$(NEMU_BIN) $(NEMU_BATCH_FLAGS) $(IMAGE).elf
 
 ### Clean a single project (remove `build/`)
 clean:
