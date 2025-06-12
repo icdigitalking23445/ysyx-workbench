@@ -18,6 +18,13 @@
 #include <cpu/difftest.h>
 #include <locale.h>
 #include "../monitor/sdb/sdb.h"
+#include "debug.h"
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <elf.h>
+#include <isa.h>
 
 /* The assembly code of instructions executed is only output to the screen
  * when the number of instructions executed is less than this value.
@@ -25,7 +32,61 @@
  * You can modify this value as you want.
  */
 #define MAX_INST_TO_PRINT 10
+#ifdef  CONFIG_FTRACE
+FtraceSym ftrace_syms[MAX_FTRACE_FUNCS];
+int       ftrace_symcnt = 0;
+static int ftrace_depth = 0;
+static const char *ftrace_stack[MAX_FTRACE_FUNCS];
 
+static inline int32_t decode_imm_jal(uint32_t inst) {
+  int32_t imm20    = (inst >> 31) & 0x1;             // bit 20
+      imm20 <<= 20;
+  int32_t imm10_1  = (inst >> 21) & 0x3FF;           // bits [10:1]
+      imm10_1 <<= 1;
+  int32_t imm11    = (inst >> 20) & 0x1;             // bit 11
+      imm11 <<= 11;
+  int32_t imm19_12 = (inst >> 12) & 0xFF;            // bits [19:12]
+      imm19_12 <<= 12;
+  int32_t imm = imm20 | imm19_12 | imm11 | imm10_1;
+  // 符号扩展：原始是 21 位（bit20 是符号位）
+  imm = (imm << 11) >> 11;
+  return imm;
+}
+
+
+static inline int32_t decode_imm_jalr(uint32_t inst) {
+  int32_t imm12 = (inst >> 20) & 0xFFF;  // bits [31:20]
+  // 符号扩展到 32 位
+  imm12 = (imm12 << 20) >> 20;
+  return imm12;
+}
+
+static inline bool is_jal(uint32_t inst) {
+  return (inst & 0x7F) == 0b1101111;
+}
+static inline bool is_jalr_call(uint32_t inst) {
+  // rd != 0 保证不是 ret（ret 是 jalr rd=0, rs1=1, imm=0）
+  return ((inst & 0x7F) == 0b1100111)
+      && (((inst >> 7) & 0x1F) != 0);
+}
+static inline bool is_ret(uint32_t inst) {
+  // RISC-V ret 伪指令： jalr x0, x1, 0
+  return inst == 0x00008067;
+}
+/// Initialize the function trace system by parsing the ELF file
+
+/// Given a program counter (PC) address, find the corresponding function name
+const char *ftrace_find(uint32_t pc) {
+  for (int i = 0; i < ftrace_symcnt; i++) {
+    uint32_t a = ftrace_syms[i].addr;
+    uint32_t sz = ftrace_syms[i].size;
+    if (pc >= a && pc < a + sz) {
+      return ftrace_syms[i].name;
+    }
+  }
+  return "???";
+}
+#endif // CONFIG_FTRACE
 CPU_state cpu = {};
 uint64_t g_nr_guest_inst = 0;
 static uint64_t g_timer = 0; // unit: us
@@ -36,6 +97,13 @@ void device_update();
 static void trace_and_difftest(Decode *_this, vaddr_t dnpc) {
 #ifdef CONFIG_ITRACE_COND
   if (ITRACE_COND) { log_write("%s\n", _this->logbuf); }
+#endif
+#ifdef CONFIG_ITRINGBUF
+  strncpy(cpu.itrace_ring[cpu.itrace_pos],
+          _this->logbuf,
+          ITRACE_LINE_MAX - 1);
+  cpu.itrace_ring[cpu.itrace_pos][ITRACE_LINE_MAX-1] = '\0';
+  cpu.itrace_pos = (cpu.itrace_pos + 1) % ITRACE_RING_DEPTH;
 #endif
   if (g_print_step) { IFDEF(CONFIG_ITRACE, puts(_this->logbuf)); }
   IFDEF(CONFIG_DIFFTEST, difftest_step(_this->pc, dnpc));
@@ -73,6 +141,31 @@ static void exec_once(Decode *s, vaddr_t pc) {
   disassemble(p, s->logbuf + sizeof(s->logbuf) - p,
       MUXDEF(CONFIG_ISA_x86, s->snpc, s->pc), (uint8_t *)&s->isa.inst, ilen);
 #endif
+#ifdef CONFIG_FTRACE
+  uint32_t inst_val = s->isa.inst;  // 32 位指令
+  if (is_jal(inst_val) || is_jalr_call(inst_val)) {
+    // 计算目标地址
+    uint32_t target;
+    if (is_jal(inst_val)) {
+  int32_t imm = decode_imm_jal(inst_val);
+  target = s->pc + imm;
+} else {
+  int32_t imm = decode_imm_jalr(inst_val);
+  uint32_t rs1 = (inst_val >> 15) & 0x1F;
+  target = cpu.gpr[rs1] + imm;
+}
+    const char *fn = ftrace_find(target);
+    ftrace_stack[ftrace_depth] = fn;
+    printf("%*scall [%s@0x%" PRIx32 "]\n", ftrace_depth*2, "",
+           fn, target);
+    ftrace_depth++;
+  }
+  else if (is_ret(inst_val)) {
+    if (ftrace_depth > 0) ftrace_depth--;
+    const char *fn = ftrace_stack[ftrace_depth];
+    printf("%*sret [%s]\n", ftrace_depth*2, "", fn);
+  }
+#endif
 }
 
 
@@ -98,6 +191,25 @@ static void statistic() {
 
 void assert_fail_msg() {
   isa_reg_display();
+  //TODO:Iringbuf
+ #ifdef CONFIG_ITRINGBUF
+  printf("===== ITRACE RING BUFFER (last %d instructions) =====\n", ITRACE_RING_DEPTH);
+  int start = cpu.itrace_pos;
+  int last  = (start + ITRACE_RING_DEPTH - 1) % ITRACE_RING_DEPTH;
+  int idx   = start;
+  for (int i = 0; i < ITRACE_RING_DEPTH; i++) {
+    if (idx == last) {
+      // 当前执行的那条，加箭头标记
+      printf("---> %s\n", cpu.itrace_ring[idx]);
+    } else {
+      // 其它指令正常缩进
+      printf("     %s\n", cpu.itrace_ring[idx]);
+    }
+    idx = (idx + 1) % ITRACE_RING_DEPTH;
+  }
+#endif
+
+
   statistic();
 }
 
@@ -112,7 +224,16 @@ void cpu_exec(uint64_t n) {
   }
 
   uint64_t timer_start = get_time();
+  //#ifdef CONFIG_FTRACE
+  //static bool ftrace_inited = false;
+  //if (!ftrace_inited && ftrace_file) {
+  //ftrace_init(ftrace_file);
+  //ftrace_inited = true;
+//}else {
+//panic("not rightly initialized ftrace_file: %s", ftrace_file);
+//}
 
+//#endif
   execute(n);
 
   uint64_t timer_end = get_time();
@@ -121,12 +242,22 @@ void cpu_exec(uint64_t n) {
   switch (nemu_state.state) {
     case NEMU_RUNNING: nemu_state.state = NEMU_STOP; break;
 
-    case NEMU_END: case NEMU_ABORT:
+    case NEMU_END: 
+     if (nemu_state.halt_ret == 0) {
       Log("nemu: %s at pc = " FMT_WORD,
-          (nemu_state.state == NEMU_ABORT ? ANSI_FMT("ABORT", ANSI_FG_RED) :
-           (nemu_state.halt_ret == 0 ? ANSI_FMT("HIT GOOD TRAP", ANSI_FG_GREEN) :
-            ANSI_FMT("HIT BAD TRAP", ANSI_FG_RED))),
-          nemu_state.halt_pc);
+          ANSI_FMT("HIT GOOD TRAP", ANSI_FG_GREEN), nemu_state.halt_pc);
+    } else {
+      Log("nemu: %s at pc = " FMT_WORD,
+          ANSI_FMT("HIT BAD TRAP", ANSI_FG_RED), nemu_state.halt_pc);
+      panic("HIT BAD TRAP!");  // panic after log
+    }
+    break;
+    
+    case NEMU_ABORT:
+      Log("nemu: %s at pc = " FMT_WORD,
+        ANSI_FMT("ABORT", ANSI_FG_RED), nemu_state.halt_pc);
+         panic("NEMU_ABORT at pc = " FMT_WORD, nemu_state.halt_pc);
+    break;
       // fall through
     case NEMU_QUIT: statistic();
   }

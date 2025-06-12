@@ -58,7 +58,7 @@ val io = IO (new  Bundle {
 //   否则           → exu.io.result_out
 writeData:= Mux(
   isJal || isJalr,
-  exu.io.jump_target,
+  pc_snpc,
   exu.io.result_out
 )
 //PC update logic

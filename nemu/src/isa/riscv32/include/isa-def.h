@@ -18,9 +18,16 @@
 
 #include <common.h>
 
+#define ITRACE_RING_DEPTH  8
+#define ITRACE_LINE_MAX    128
+
 typedef struct {
   word_t gpr[MUXDEF(CONFIG_RVE, 16, 32)];
   vaddr_t pc;
+  #ifdef CONFIG_ITRINGBUF
+  char itrace_ring[ITRACE_RING_DEPTH][ITRACE_LINE_MAX];
+  int  itrace_pos;
+#endif
 } MUXDEF(CONFIG_RV64, riscv64_CPU_state, riscv32_CPU_state);
 
 // decode

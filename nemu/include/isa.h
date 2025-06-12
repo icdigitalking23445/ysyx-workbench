@@ -15,7 +15,7 @@
 
 #ifndef __ISA_H__
 #define __ISA_H__
-
+extern char *ftrace_file;
 // Located at src/isa/$(GUEST_ISA)/include/isa-def.h
 #include <isa-def.h>
 

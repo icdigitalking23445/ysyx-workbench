@@ -166,7 +166,27 @@ config WATCHPOINT
 	help
 		Enable WatchPiont for set or delete.
 
-
+config ITRINGBUF
+  depends on ITRACE
+  bool "Enable instruction ring buffer"
+  default y
+  help
+    Enable instruction ring buffer for ITRACE.
+    This will reduce the memory usage of ITRACE, but may cause some performance loss.
+config MTRACE
+  depends on TRACE
+  bool "Enable memory tracer"
+  default n
+  help
+    Enable memory tracer to trace memory accesses.
+    This will significantly increase the memory usage of NEMU.
+config FTRACE
+  depends on TRACE
+  bool "Enable function tracer"
+  default n
+  help
+    Enable function tracer to trace function calls and returns.
+    This will significantly increase the memory usage of NEMU.  
 choice
   prompt "Reference design"
   default DIFFTEST_REF_SPIKE if ISA_riscv

@@ -13,8 +13,19 @@
 * See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
+#include "cpu/cpu.h"
+#include "debug.h"
+#include "macro.h"
 #include <isa.h>
 #include <memory/paddr.h>
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <elf.h>
+char *ftrace_file = NULL;
 
 void init_rand();
 void init_log(const char *log_file);
@@ -67,7 +78,55 @@ static long load_img() {
   fclose(fp);
   return size;
 }
+#ifdef CONFIG_FTRACE
+void ftrace_init(const char *elf_path) {
+  int fd = open(elf_path, O_RDONLY);
+  if (fd < 0) {
+    perror("ftrace_init: open");
+    return;
+  }
+  struct stat st;
+  fstat(fd, &st);
+  void *map = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  close(fd);
+  if (map == MAP_FAILED) {
+    perror("ftrace_init: mmap");
+    return;
+  }
+  Elf32_Ehdr *eh = (Elf32_Ehdr *)map;
+  Elf32_Shdr *sh = (Elf32_Shdr *)(map + eh->e_shoff);
+  const char  *shstr = (char *)map + sh[eh->e_shstrndx].sh_offset;
 
+  // 找到 .symtab 和它对应的 string table
+  Elf32_Shdr *symtab_sh = NULL, *strtab_sh = NULL;
+  for (int i = 0; i < eh->e_shnum; i++) {
+    const char *name = shstr + sh[i].sh_name;
+    if (strcmp(name, ".symtab") == 0) {
+      symtab_sh = &sh[i];
+    } else if (strcmp(name, ".strtab") == 0) {
+      strtab_sh = &sh[i];
+    }
+  }
+  if (!symtab_sh || !strtab_sh) {
+    munmap(map, st.st_size);
+    return;
+  }
+  Elf32_Sym *syms = (Elf32_Sym *)(map + symtab_sh->sh_offset);
+  const char *strs = (char *)(map + strtab_sh->sh_offset);
+  int nsyms = symtab_sh->sh_size / sizeof(Elf32_Sym);
+
+  // 扫描函数符号
+  for (int i = 0; i < nsyms && ftrace_symcnt < MAX_FTRACE_FUNCS; i++) {
+    if (ELF32_ST_TYPE(syms[i].st_info) == STT_FUNC && syms[i].st_size > 0) {
+      ftrace_syms[ftrace_symcnt].name = strdup(strs + syms[i].st_name);
+      ftrace_syms[ftrace_symcnt].addr = syms[i].st_value;
+      ftrace_syms[ftrace_symcnt].size = syms[i].st_size;
+      ftrace_symcnt++;
+    }
+  }
+  munmap(map, st.st_size);
+}
+#endif // CONFIG_FTRACE
 static int parse_args(int argc, char *argv[]) {
   const struct option table[] = {
     {"batch"    , no_argument      , NULL, 'b'},
@@ -75,15 +134,22 @@ static int parse_args(int argc, char *argv[]) {
     {"diff"     , required_argument, NULL, 'd'},
     {"port"     , required_argument, NULL, 'p'},
     {"help"     , no_argument      , NULL, 'h'},
+    {"ftrace"   , required_argument, NULL, 'f'},
     {0          , 0                , NULL,  0 },
   };
   int o;
-  while ( (o = getopt_long(argc, argv, "-bhl:d:p:", table, NULL)) != -1) {
+  while ( (o = getopt_long(argc, argv, "-bhl:d:p:f:", table, NULL)) != -1) {
     switch (o) {
       case 'b': sdb_set_batch_mode(); break;
       case 'p': sscanf(optarg, "%d", &difftest_port); break;
       case 'l': log_file = optarg; break;
       case 'd': diff_so_file = optarg; break;
+      case 'f': {ftrace_file = optarg;
+        
+        printf("### ftrace_file = %s\n", ftrace_file);
+
+        
+        break;} 
       case 1: img_file = optarg; return 0;
       default:
         printf("Usage: %s [OPTION...] IMAGE [args]\n\n", argv[0]);
@@ -91,6 +157,7 @@ static int parse_args(int argc, char *argv[]) {
         printf("\t-l,--log=FILE           output log to FILE\n");
         printf("\t-d,--diff=REF_SO        run DiffTest with reference REF_SO\n");
         printf("\t-p,--port=PORT          run DiffTest with port PORT\n");
+        printf("\t-f,--ftrace=FILE        output function trace to FILE\n");
         printf("\n");
         exit(0);
     }
@@ -129,7 +196,7 @@ void init_monitor(int argc, char *argv[]) {
   init_sdb();
 
   IFDEF(CONFIG_ITRACE, init_disasm());
-
+  IFDEF(CONFIG_FTRACE, ftrace_init(ftrace_file));
   /* Display welcome message. */
   welcome();
 }

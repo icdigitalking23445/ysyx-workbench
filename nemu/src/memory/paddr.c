@@ -13,11 +13,13 @@
 * See the Mulan PSL v2 for more details.
 ***************************************************************************************/
 
+#include "debug.h"
 #include <memory/host.h>
 #include <memory/paddr.h>
 #include <device/mmio.h>
 #include <isa.h>
-
+#include <cpu/cpu.h>
+#include <stdio.h>
 #if   defined(CONFIG_PMEM_MALLOC)
 static uint8_t *pmem = NULL;
 #else // CONFIG_PMEM_GARRAY
@@ -50,15 +52,44 @@ void init_mem() {
   Log("physical memory area [" FMT_PADDR ", " FMT_PADDR "]", PMEM_LEFT, PMEM_RIGHT);
 }
 
+
 word_t paddr_read(paddr_t addr, int len) {
-  if (likely(in_pmem(addr))) return pmem_read(addr, len);
-  IFDEF(CONFIG_DEVICE, return mmio_read(addr, len));
+  if (likely(in_pmem(addr))) {
+    word_t ret = pmem_read(addr, len);
+#ifdef CONFIG_MTRACE
+    Log("MTRACE R [%" PRIx64 "+%d] = 0x%" PRIx64 " @ pc=0x%" PRIx64 "\n",
+           (uint64_t)addr, len, (uint64_t)ret, (uint64_t)cpu.pc);
+#endif
+    return ret;
+  }
+  IFDEF(CONFIG_DEVICE, {
+    word_t ret = mmio_read(addr, len);
+#ifdef CONFIG_MTRACE
+    Log("MTRACE R [%" PRIx64 "+%d] = 0x%" PRIx64 " @ pc=0x%" PRIx64 "\n",
+           (uint64_t)addr, len, (uint64_t)ret, (uint64_t)cpu.pc);
+#endif
+    return ret;
+  });
   out_of_bound(addr);
   return 0;
 }
 
 void paddr_write(paddr_t addr, int len, word_t data) {
-  if (likely(in_pmem(addr))) { pmem_write(addr, len, data); return; }
-  IFDEF(CONFIG_DEVICE, mmio_write(addr, len, data); return);
+  if (likely(in_pmem(addr))) {
+    pmem_write(addr, len, data);
+#ifdef CONFIG_MTRACE
+    Log("MTRACE W [%" PRIx64 "+%d] = 0x%" PRIx64 " @ pc=0x%" PRIx64 "\n",
+           (uint64_t)addr, len, (uint64_t)data, (uint64_t)cpu.pc);
+#endif
+    return;
+  }
+  IFDEF(CONFIG_DEVICE, {
+    mmio_write(addr, len, data);
+#ifdef CONFIG_MTRACE
+    Log("MTRACE W [%" PRIx64 "+%d] = 0x%" PRIx64 " @ pc=0x%" PRIx64 "\n",
+           (uint64_t)addr, len, (uint64_t)data, (uint64_t)cpu.pc);
+#endif
+    return;
+  });
   out_of_bound(addr);
 }

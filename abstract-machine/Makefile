@@ -1,6 +1,6 @@
 # Makefile for AbstractMachine Kernels and Libraries
-NEMU_BIN  ?= $(NEMU_HOME)/build/riscv32-nemu-interpreter
-NEMU_BATCH_FLAGS ?= -b
+#NEMU_BIN  ?= $(NEMU_HOME)/build/riscv32-nemu-interpreter
+#NEMU_BATCH_FLAGS ?= -b
 ### *Get a more readable version of this Makefile* by `make html` (requires python-markdown)
 html:
 	cat Makefile | sed 's/^\([^#]\)/    \1/g' | markdown_py > Makefile.html

@@ -38,7 +38,6 @@ class Vtop___024root final : public VerilatedModule {
         IData/*31:0*/ top__DOT__pc;
         IData/*31:0*/ top__DOT__pc_snpc;
         IData/*31:0*/ top__DOT__branchPath;
-        IData/*31:0*/ top__DOT__idu__DOT___io_imm_T_36;
         IData/*31:0*/ top__DOT__regFile__DOT__regFile_0;
         IData/*31:0*/ top__DOT__regFile__DOT__regFile_1;
         IData/*31:0*/ top__DOT__regFile__DOT__regFile_2;
@@ -75,6 +74,7 @@ class Vtop___024root final : public VerilatedModule {
         IData/*31:0*/ top__DOT__exu__DOT__alu__DOT__addR_io_a;
         IData/*31:0*/ top__DOT__exu__DOT__alu__DOT__addR_io_b;
         IData/*31:0*/ top__DOT__exu__DOT__alu__DOT__logicU_io_out;
+        IData/*31:0*/ top__DOT__exu__DOT__alu__DOT__addI_io_b;
         IData/*31:0*/ top__DOT__exu__DOT__alu__DOT__addI_io_sum;
         IData/*31:0*/ top__DOT__exu__DOT__alu__DOT___io_result_T_7;
         IData/*31:0*/ top__DOT__exu__DOT__alu__DOT__shftr__DOT___io_out_T_1;

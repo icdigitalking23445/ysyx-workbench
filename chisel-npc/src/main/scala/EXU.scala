@@ -217,7 +217,7 @@ class ALU extends Module {
 
   // —— U-type (LUI/AUIPC)
   val uunit = Module(new UTypeUnit)
-  uunit.io.imm     := io.imm
+  uunit.io.imm     := io.imm.asUInt
   uunit.io.pc      := io.pc
   // isAuipc 由外层决定，ALU 里只用 uunit.out
   uunit.io.isAuipc := (io.TYpe === "b0101".U)  // U-type 的 AUIPC
@@ -245,7 +245,7 @@ class EXU extends Module {
   val io = IO(new Bundle {
     val funct3        = Input(UInt(3.W))
     val funct7        = Input(UInt(7.W))
-    val imm           = Input(SInt(12.W))
+    val imm           = Input(SInt(32.W))
     val TYpe          = Input(UInt(4.W))      // 4-bit
     val reg_rs1       = Input(UInt(32.W))
     val reg_rs2       = Input(UInt(32.W))

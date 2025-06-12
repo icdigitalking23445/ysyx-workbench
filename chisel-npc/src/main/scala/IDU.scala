@@ -11,7 +11,7 @@ class IDU extends Module {
     val rd = Output(UInt(5.W))
     val funct3 = Output(UInt(3.W))
     val funct7 = Output(UInt(7.W))
-    val imm = Output(SInt(12.W))
+    val imm = Output(SInt(32.W))
     val TYpe = Output(UInt(4.W)) // Type of instruction (R, I, S, B, U, J)
     //val pc_sel = Output(UInt(2.W)) // PC selection signal
     val IsIllegal = Output(Bool()) // Illegal instruction flag
@@ -75,15 +75,29 @@ class IDU extends Module {
         "b0111".U -> io.instruction(11, 7) // I-type (JALR, treated as Immediate)
     ))
 
-    io.imm := MuxLookup(io.TYpe, 0.S(12.W), Seq(
+    io.imm := MuxLookup(io.TYpe, 0.S(32.W), Seq(
         "b0000".U -> 0.S, // R-type - no immediate
-        "b0001".U -> io.instruction(31, 20).asSInt, // I-type (Load)
-        "b0010".U -> Cat(io.instruction(31, 25), io.instruction(11, 7)).asSInt, // S-type (Store)
-        "b0011".U -> Cat(io.instruction(31, 25), io.instruction(11, 8), io.instruction(7)).asSInt, // B-type (Branch)
-        "b0100".U -> Cat(io.instruction(31, 20)).asSInt, // I-type (Immediate)
+        "b0001".U -> Cat(Fill(20, io.instruction(31)),    // 用最高位填 20 位
+                io.instruction(31, 20)             // 原来的 12 位
+              ).asSInt, // I-type (Load)
+        "b0010".U -> Cat(Fill(20, io.instruction(31)),    // 填 20 个符号位
+                io.instruction(31, 25),            // 原高 7 位
+                io.instruction(11, 7)).asSInt, // S-type (Store)
+        "b0011".U -> Cat(Fill(19, io.instruction(31)),    // 填补符号到位 [31:13]
+                io.instruction(31),                // imm[12]
+                io.instruction(7),                 // imm[11]
+                io.instruction(30, 25),            // imm[10:5]
+                io.instruction(11, 8),             // imm[4:1]
+                0.U(1.W) ).asSInt, // B-type (Branch)
+        "b0100".U -> Cat(Fill(20, io.instruction(31)), io.instruction(31, 20)).asSInt, // I-type (Immediate)
         "b0101".U -> Cat(io.instruction(31, 12), 0.U(12.W)).asSInt, // U-type (LUI)
-        "b0110".U -> Cat(io.instruction(31, 12), 0.U(12.W)).asSInt, // J-type (JAL)
-        "b0111".U -> Cat(io.instruction(31, 20)).asSInt // I-type (JALR, treated as Immediate)
+        "b0110".U -> Cat(Fill(11, io.instruction(31)),
+  io.instruction(31),                   // imm[20]
+  io.instruction(19,12),                // imm[19:12]
+  io.instruction(20),                   // imm[11]
+  io.instruction(30,21),                // imm[10:1]
+  0.U(1.W)).asSInt, // imm[0], // J-type (JAL)
+        "b0111".U -> Cat(Fill(20, io.instruction(31)), io.instruction(31, 20)).asSInt // I-type (JALR, treated as Immediate)
     ))
     io.funct3 := io.instruction(14, 12) // Extract funct3 field
     io.funct7 := io.instruction(31, 25) // Extract funct7 field
