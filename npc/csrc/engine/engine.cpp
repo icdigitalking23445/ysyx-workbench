@@ -1,53 +1,51 @@
-// csrc/engine/engine.c
+// csrc/engine/engine.cpp
 
-#include "engine.h"
+#include "../include/all.h"    // extern uint8_t *pmem; extern Vtop *sim_top; extern VerilatedVcdC *tfp;
+// all.h 中已经声明了 pmem_read/pmem_write 的原型
+#include "Vtop.h"
+#include "Vtop___024root.h"
+#include <verilated.h>
+#include <verilated_vcd_c.h>
 #include <cassert>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 #include <unistd.h>
-#include <verilated.h>
 
-#define PMEM_BASE 0x80000000
 #define PMEM_SIZE (128 * 1024 * 1024)
 
-// 全局变量定义（all.h 中 extern）
-uint8_t        *pmem     = NULL;
-VerilatedVcdC *tfp      = NULL;
-Vtop          *sim_top  = NULL;
-extern "C" void set_sim_top(Vtop *t) {
-  sim_top = t;
-}
-uint32_t pmem_read(uint32_t addr) {
-  assert(pmem && addr >= PMEM_BASE && addr < PMEM_BASE + PMEM_SIZE);
-  uint32_t idx = addr - PMEM_BASE;
-  return  pmem[idx] | (pmem[idx+1]<<8) | (pmem[idx+2]<<16) | (pmem[idx+3]<<24);
-}
+// 由 DPI-C 注册的顶层指针
+extern "C" void set_sim_top(Vtop *t);
 
+// 仿真引擎入口
 int engine_start(int argc, char **argv) {
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <program.bin>\n", argv[0]);
     return 1;
   }
 
-  // 1) 加载 bin 到 pmem
+  // —— 1. 把程序二进制加载到 C++ 侧 pmem[] ——  
   const char *bin_file = argv[1];
   int fd = open(bin_file, O_RDONLY);
-  assert(fd > 0);
+  assert(fd >= 0);
   struct stat st;
-  fstat(fd, &st);
-  assert((size_t)st.st_size <= PMEM_SIZE);
-  pmem = (uint8_t*)mmap(NULL, PMEM_SIZE,
-                        PROT_READ|PROT_WRITE,
-                        MAP_ANONYMOUS|MAP_PRIVATE,
-                        -1,0);
-  assert(pmem != MAP_FAILED);
-  memset(pmem,0,PMEM_SIZE);
-  read(fd, pmem, st.st_size);
+  assert(fstat(fd, &st) == 0 && (size_t)st.st_size <= PMEM_SIZE);
+
+  // 分配并清零
+  pmem = (uint8_t*)malloc(PMEM_SIZE);
+  assert(pmem);
+  memset(pmem, 0, PMEM_SIZE);
+
+
+  // 读取
+  ssize_t got = read(fd, pmem, st.st_size);
+  
+  assert(got == st.st_size);
   close(fd);
 
-  // 2) Verilator 初始化
+  // —— 2. Verilator + trace 初始化 ——  
   Verilated::commandArgs(argc, argv);
   Verilated::traceEverOn(true);
 
@@ -58,20 +56,22 @@ int engine_start(int argc, char **argv) {
   sim_top->trace(tfp, 99);
   tfp->open("sim.vcd");
 
-  // 3) 复位脉冲
+  // —— 3. 复位脉冲 ——  
   sim_top->reset = 1;
-  sim_top->clock = 0;
-  sim_top->io_instruction = 0x00000013;
-  sim_top->eval(); tfp->dump(0);
-
-  sim_top->clock = 1;
-  sim_top->eval(); tfp->dump(1);
-
+  for (int cycle = 0; cycle < 2; cycle++) {
+    sim_top->clock = 0; sim_top->eval(); tfp->dump(2*cycle + 0);
+    sim_top->clock = 1; sim_top->eval(); tfp->dump(2*cycle + 1);
+  }
+  fprintf(stderr, "pc starts at  0x%08x\n", sim_top->rootp->top__DOT__pc);
   sim_top->reset = 0;
 
-  // 4) 调用 monitor，进入仿真 + SDB
+  // Reset 完毕后，不再由 C++ drive 指令取用
+  // 硬件 IFU 会自动调用 pmem_read(pc) 拿到第一条指令
+
+  // —— 4. 进入主循环／调试／差分测试 ——  
   init_monitor(argc, argv);
 
-  // 永不返回
+  // 不会返回
   return 0;
 }
+

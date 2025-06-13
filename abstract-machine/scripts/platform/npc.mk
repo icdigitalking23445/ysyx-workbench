@@ -30,7 +30,7 @@ image: image-dep
 
 run: insert-arg
 	@echo "Running sim"
-	@$(SIM_EXE) $(IMAGE).bin -i
+	@$(SIM_EXE) $(IMAGE).bin -t
 	@rm -f $(RESULT)
     
 

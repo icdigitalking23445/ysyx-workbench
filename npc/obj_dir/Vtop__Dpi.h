@@ -20,6 +20,10 @@ extern "C" {
     extern void illegal_halt();
     // DPI import at vsrc/DPIHandlers.v:8:32
     extern void interrupt_halt();
+    // DPI import at vsrc/Pmem.v:15:31
+    extern int pmem_read(int raddr);
+    // DPI import at vsrc/Pmem.v:16:32
+    extern void pmem_write(int waddr, int wdata, char wmask);
 
 #ifdef __cplusplus
 }

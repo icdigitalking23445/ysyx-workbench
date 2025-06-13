@@ -89,9 +89,9 @@ class UTypeUnit extends Module {
     val out     = Output(UInt(32.W))
   })
   // LUI: imm<<12
-  val luiVal   = io.imm << 12
+  val luiVal   = io.imm 
   // AUIPC: pc + (imm<<12)
-  val auipcVal = io.pc + (io.imm << 12)
+  val auipcVal = io.pc + io.imm 
   io.out := Mux(io.isAuipc, auipcVal, luiVal)
 }
 

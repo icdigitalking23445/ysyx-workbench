@@ -1,10 +1,12 @@
 // csrc/dpi_handlers.cpp
 
 #include "include/all.h"
+#include <cstdint>
 #include <svdpi.h>
 #include <cstdio>
 #include <cstdlib>
 #include "Vtop___024root.h"
+#include <cassert>
 /**
  *  当 Verilog 里检测到“非法指令”时，由 DPI-C 调用这个函数：
  */
@@ -44,4 +46,27 @@ extern "C" void interrupt_halt() {
     }
     fflush(stdout);
     std::exit(code);
+}
+extern "C" uint32_t pmem_read(uint32_t raddr) {
+  assert(pmem && "pmem not initialized");
+  // raddr 是物理地址，先算出偏移
+  int idx = raddr - PMEM_BASE;
+  assert(idx >= 0 && idx + 3 < PMEM_SIZE);
+  // 小端拼接 4 字节
+  uint32_t v =  (uint32_t)pmem[idx]
+              | ((uint32_t)pmem[idx + 1] << 8)
+              | ((uint32_t)pmem[idx + 2] << 16)
+              | ((uint32_t)pmem[idx + 3] << 24);
+  return (int)v;
+}
+
+extern "C" void pmem_write(int waddr, int wdata, unsigned char wmask) {
+  assert(pmem && "pmem not initialized");
+  int idx = waddr - PMEM_BASE;
+  assert(idx >= 0 && idx + 3 < PMEM_SIZE);
+  // 按 Byte 掩码写入
+  if (wmask & 0x1) pmem[idx    ] =  wdata        & 0xFF;
+  if (wmask & 0x2) pmem[idx + 1] = (wdata >>  8) & 0xFF;
+  if (wmask & 0x4) pmem[idx + 2] = (wdata >> 16) & 0xFF;
+  if (wmask & 0x8) pmem[idx + 3] = (wdata >> 24) & 0xFF;
 }

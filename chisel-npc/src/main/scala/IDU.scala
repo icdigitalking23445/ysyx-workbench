@@ -18,7 +18,7 @@ class IDU extends Module {
     val IsInterrupt = Output(Bool()) // Interrupt instruction flag
   })
   // Set pc_sel based on instruction type
-  //io.pc_sel := MuxLookup(io.instruction(6, 0), 0.U(2.W), Seq(
+  //io.pc_sel := MuxLookup(inst(6, 0), 0.U(2.W), Seq(
     //"b1101111".U -> "b01".U, // JAL
     //"b1100011".U -> "b10".U, // Branch
     //"b0110111".U -> "b00".U, // LUI
@@ -29,9 +29,11 @@ class IDU extends Module {
 
   io.IsInterrupt := Mux(io.TYpe === "b1001".U,true.B,false.B) // Default to not interrupt
 
+  val rawInst = io.instruction
+  val inst = Wire(UInt(32.W))
+  inst := Mux(rawInst === 0.U,  0x00000013.U,  rawInst)
 
-
-  io.TYpe := MuxLookup(io.instruction(6, 0), "b1000".U, Seq(
+  io.TYpe := MuxLookup(inst(6, 0), "b1000".U, Seq(
     "b0110011".U -> "b0000".U, // R-type
     "b0000011".U -> "b0001".U, // I-type (Load)
     "b0100011".U -> "b0010".U, // S-type 
@@ -45,61 +47,61 @@ class IDU extends Module {
     "b1110011".U -> "b1001".U 
   ))//default: illegal instruction
     io.rs1 := MuxLookup(io.TYpe, 0.U(5.W), Seq(
-        "b0000".U -> io.instruction(19, 15), // R-type
-        "b0001".U -> io.instruction(19, 15), // I-type (Load)
-        "b0010".U -> io.instruction(24, 20), // S-type (Store)
-        "b0011".U -> io.instruction(19, 15), // B-type (Branch)
-        "b0100".U -> io.instruction(19, 15), // I-type (Immediate)
+        "b0000".U -> inst(19, 15), // R-type
+        "b0001".U -> inst(19, 15), // I-type (Load)
+        "b0010".U -> inst(24, 20), // S-type (Store)
+        "b0011".U -> inst(19, 15), // B-type (Branch)
+        "b0100".U -> inst(19, 15), // I-type (Immediate)
         "b0101".U -> 0.U, // U-type (LUI) - no rs1
         "b0110".U -> 0.U,  // J-type (JAL) - no rs1
-        "b0111".U -> io.instruction(19, 15) // I-type (JALR, treated as Immediate)
+        "b0111".U -> inst(19, 15) // I-type (JALR, treated as Immediate)
     ))
     io.rs2 := MuxLookup(io.TYpe, 0.U(5.W), Seq(
-        "b0000".U -> io.instruction(24, 20), // R-type
+        "b0000".U -> inst(24, 20), // R-type
         "b0001".U -> 0.U, // I-type (Load) - no rs2
-        "b0010".U -> io.instruction(19, 15), // S-type (Store)
+        "b0010".U -> inst(19, 15), // S-type (Store)
         "b0011".U -> 0.U, // B-type (Branch) - no rs2
-        "b0100".U -> io.instruction(24, 20), // I-type (Immediate)
+        "b0100".U -> inst(24, 20), // I-type (Immediate)
         "b0101".U -> 0.U, // U-type (LUI) - no rs2
         "b0110".U -> 0.U,  // J-type (JAL) - no rs2
         "b0111".U -> 0.U // I-type (JALR, treated as Immediate - no rs2
     ))
     io.rd := MuxLookup(io.TYpe, 0.U(5.W), Seq(
-        "b0000".U -> io.instruction(11, 7), // R-type
-        "b0001".U -> io.instruction(11, 7), // I-type (Load)
+        "b0000".U -> inst(11, 7), // R-type
+        "b0001".U -> inst(11, 7), // I-type (Load)
         "b0010".U -> 0.U, // S-type (Store) - no rd
         "b0011".U -> 0.U, // B-type (Branch) - no rd
-        "b0100".U -> io.instruction(11, 7), // I-type (Immediate)
-        "b0101".U -> io.instruction(11, 7), // U-type (LUI)
-        "b0110".U -> io.instruction(11, 7),  // J-type (JAL)
-        "b0111".U -> io.instruction(11, 7) // I-type (JALR, treated as Immediate)
+        "b0100".U -> inst(11, 7), // I-type (Immediate)
+        "b0101".U -> inst(11, 7), // U-type (LUI)
+        "b0110".U -> inst(11, 7),  // J-type (JAL)
+        "b0111".U -> inst(11, 7) // I-type (JALR, treated as Immediate)
     ))
 
     io.imm := MuxLookup(io.TYpe, 0.S(32.W), Seq(
         "b0000".U -> 0.S, // R-type - no immediate
-        "b0001".U -> Cat(Fill(20, io.instruction(31)),    // 用最高位填 20 位
-                io.instruction(31, 20)             // 原来的 12 位
+        "b0001".U -> Cat(Fill(20, inst(31)),    // 用最高位填 20 位
+                inst(31, 20)             // 原来的 12 位
               ).asSInt, // I-type (Load)
-        "b0010".U -> Cat(Fill(20, io.instruction(31)),    // 填 20 个符号位
-                io.instruction(31, 25),            // 原高 7 位
-                io.instruction(11, 7)).asSInt, // S-type (Store)
-        "b0011".U -> Cat(Fill(19, io.instruction(31)),    // 填补符号到位 [31:13]
-                io.instruction(31),                // imm[12]
-                io.instruction(7),                 // imm[11]
-                io.instruction(30, 25),            // imm[10:5]
-                io.instruction(11, 8),             // imm[4:1]
+        "b0010".U -> Cat(Fill(20, inst(31)),    // 填 20 个符号位
+                inst(31, 25),            // 原高 7 位
+                inst(11, 7)).asSInt, // S-type (Store)
+        "b0011".U -> Cat(Fill(19, inst(31)),    // 填补符号到位 [31:13]
+                inst(31),                // imm[12]
+                inst(7),                 // imm[11]
+                inst(30, 25),            // imm[10:5]
+                inst(11, 8),             // imm[4:1]
                 0.U(1.W) ).asSInt, // B-type (Branch)
-        "b0100".U -> Cat(Fill(20, io.instruction(31)), io.instruction(31, 20)).asSInt, // I-type (Immediate)
-        "b0101".U -> Cat(io.instruction(31, 12), 0.U(12.W)).asSInt, // U-type (LUI)
-        "b0110".U -> Cat(Fill(11, io.instruction(31)),
-  io.instruction(31),                   // imm[20]
-  io.instruction(19,12),                // imm[19:12]
-  io.instruction(20),                   // imm[11]
-  io.instruction(30,21),                // imm[10:1]
+        "b0100".U -> Cat(Fill(20, inst(31)), inst(31, 20)).asSInt, // I-type (Immediate)
+        "b0101".U -> Cat(inst(31, 12), 0.U(12.W)).asSInt, // U-type (LUI)
+        "b0110".U -> Cat(Fill(11, inst(31)),
+  inst(31),                   // imm[20]
+  inst(19,12),                // imm[19:12]
+  inst(20),                   // imm[11]
+  inst(30,21),                // imm[10:1]
   0.U(1.W)).asSInt, // imm[0], // J-type (JAL)
-        "b0111".U -> Cat(Fill(20, io.instruction(31)), io.instruction(31, 20)).asSInt // I-type (JALR, treated as Immediate)
+        "b0111".U -> Cat(Fill(20, inst(31)), inst(31, 20)).asSInt // I-type (JALR, treated as Immediate)
     ))
-    io.funct3 := io.instruction(14, 12) // Extract funct3 field
-    io.funct7 := io.instruction(31, 25) // Extract funct7 field
+    io.funct3 := inst(14, 12) // Extract funct3 field
+    io.funct7 := inst(31, 25) // Extract funct7 field
     
 }

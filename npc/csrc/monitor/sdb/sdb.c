@@ -1,6 +1,7 @@
 #include "../../include/all.h"
 #include "Vtop___024root.h"
 #include "sdb.h"
+#include <cstdint>
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <cstdio>
@@ -23,43 +24,30 @@ static char* rl_gets() {
   }
   return line_read;
 }
-
 /* 驱动 Verilator 模型执行 n 条指令，n<0 表示一直执行到 ebreak */
 static void cpu_exec(int n) {
-  if (n < 0) {
-    while (1) {
-    // —— 半个周期：拉低时钟 ——  
+  int64_t cnt = 0;
+
+  auto step_one = [&]() {
+    // —— 半周期：拉低时钟 ——  
     sim_top->clock = 0;
     sim_top->eval();
     if (tfp) tfp->dump(sim_time++);
 
-    // 取 PC、读指令、送入 CPU
-    uint32_t pc   = sim_top->io_pc;
-    uint32_t inst = pmem_read(pc);
-    sim_top->io_instruction = inst;
-
-    // —— 半个周期：拉高时钟 ——  
+    // —— 半周期：拉高时钟 ——  
     sim_top->clock = 1;
     sim_top->eval();
     if (tfp) tfp->dump(sim_time++);
+  };
 
-    // 遇到 ebreak/interrupt 会由 DPI-C 回调直接 exit()
+  if (n < 0) {
+    // 无限执行，直到 ebreak/interrupt 由 DPI-C exit()
+    while (1) {
+      step_one();
     }
   } else {
-    for (int i = 0; i < n; i++) {
-     sim_top->clock = 0;
-    sim_top->eval();
-    if (tfp) tfp->dump(sim_time++);
-
-    // 取 PC、读指令、送入 CPU
-    uint32_t pc   = sim_top->io_pc;
-    uint32_t inst = pmem_read(pc);
-    sim_top->io_instruction = inst;
-
-    // —— 半个周期：拉高时钟 ——  
-    sim_top->clock = 1;
-    sim_top->eval();
-    if (tfp) tfp->dump(sim_time++);
+    for (cnt = 0; cnt < n; cnt++) {
+      step_one();
     }
   }
 }

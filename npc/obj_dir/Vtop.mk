@@ -46,6 +46,7 @@ VM_USER_CLASSES = \
 	dpi_handlers \
 	engine \
 	main \
+	difftest \
 	monitor \
 	expr \
 	sdb \
@@ -73,6 +74,8 @@ dpi_handlers.o: csrc/dpi_handlers.cpp
 engine.o: csrc/engine/engine.cpp
 	$(OBJCACHE) $(CXX) $(CXXFLAGS) $(CPPFLAGS) $(OPT_FAST) -c -o $@ $<
 main.o: csrc/main.cpp
+	$(OBJCACHE) $(CXX) $(CXXFLAGS) $(CPPFLAGS) $(OPT_FAST) -c -o $@ $<
+difftest.o: csrc/monitor/difftest.c
 	$(OBJCACHE) $(CXX) $(CXXFLAGS) $(CPPFLAGS) $(OPT_FAST) -c -o $@ $<
 monitor.o: csrc/monitor/monitor.c
 	$(OBJCACHE) $(CXX) $(CXXFLAGS) $(CPPFLAGS) $(OPT_FAST) -c -o $@ $<

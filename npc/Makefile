@@ -9,7 +9,9 @@ CXXFLAGS                := -O2 -std=c++17 \
                            -Icsrc
 LDFLAGS += -lreadline
 VERILOG_TOP             := vsrc/top.v
-VERILOG_OTHER           := vsrc/DPIHandlers.v
+VERILOG_OTHER           := vsrc/DPIHandlers.v\
+						   vsrc/Pmem.v \
+
 SIM_CPP := \
     csrc/main.cpp \
     csrc/dpi_handlers.cpp \
@@ -17,7 +19,8 @@ SIM_CPP := \
     csrc/monitor/monitor.c \
     csrc/monitor/sdb/sdb.c \
     csrc/monitor/sdb/expr.c \
-    csrc/monitor/sdb/watchpoint.c
+    csrc/monitor/sdb/watchpoint.c \
+	csrc/monitor/difftest.c \
 
 VERILATED_LIB           := obj_dir/Vtop__ALL.a
 SIM_EXE                 := sim
