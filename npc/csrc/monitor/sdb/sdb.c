@@ -32,12 +32,12 @@ static void cpu_exec(int n) {
     // —— 半周期：拉低时钟 ——  
     sim_top->clock = 0;
     sim_top->eval();
-    if (tfp) tfp->dump(sim_time++);
+    
 
     // —— 半周期：拉高时钟 ——  
     sim_top->clock = 1;
     sim_top->eval();
-    if (tfp) tfp->dump(sim_time++);
+    
   };
 
   if (n < 0) {

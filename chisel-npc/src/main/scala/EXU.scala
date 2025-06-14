@@ -156,6 +156,7 @@ class ALU extends Module {
     val reg_rs2  = Input(UInt(32.W))
     val imm      = Input(UInt(32.W))
     val pc       = Input(UInt(32.W))
+     val isAuipc  = Input(Bool())
     val result   = Output(UInt(32.W))
   })
 
@@ -170,7 +171,8 @@ class ALU extends Module {
 
   val shftr  = Module(new Shifter)
   shftr.io.in     := io.reg_rs1
-  shftr.io.shamt  := io.reg_rs2(4, 0)
+  val isIShift = (io.TYpe === "b0100".U) && (io.funct3 === "b001".U || io.funct3 === "b101".U)
+  shftr.io.shamt  := Mux(isIShift, io.imm(4,0), io.reg_rs2(4, 0))
   shftr.io.funct3 := io.funct3
   shftr.io.funct7 := io.funct7
 
@@ -199,28 +201,33 @@ class ALU extends Module {
   addI.io.a  := io.reg_rs1
   addI.io.b  := io.imm
 
-  val itypeRes = Wire(UInt(32.W))
+  
+  // I-type：把 shift-immediate (001/101) 也映射给 Shifter
+ val itypeRes = Wire(UInt(32.W))
   itypeRes := MuxLookup(io.funct3, 0.U, Seq(
     "b000".U -> addI.io.sum,                          // ADDI
+    "b001".U -> shftr.io.out,                         // SLLI
     "b010".U -> (io.reg_rs1.asSInt < io.imm.asSInt).asUInt, // SLTI
     "b011".U -> (io.reg_rs1 < io.imm).asUInt,          // SLTIU
     "b100".U -> (io.reg_rs1 ^ io.imm),                 // XORI
+    "b101".U -> shftr.io.out,                         // SRLI/SRAI
     "b110".U -> (io.reg_rs1 | io.imm),                 // ORI
     "b111".U -> (io.reg_rs1 & io.imm)                  // ANDI
-    // SLLI/SRLI/SRAI 在外层 Shifter 里处理
   ))
+
 
   // —— Load/Store 地址计算：reg_rs1 + imm
   val addrAdd = Module(new Adder32)
   addrAdd.io.a := io.reg_rs1
-  addrAdd.io.b := io.imm
+  addrAdd.io.b := io.imm.asUInt
 
   // —— U-type (LUI/AUIPC)
   val uunit = Module(new UTypeUnit)
   uunit.io.imm     := io.imm.asUInt
   uunit.io.pc      := io.pc
   // isAuipc 由外层决定，ALU 里只用 uunit.out
-  uunit.io.isAuipc := (io.TYpe === "b0101".U)  // U-type 的 AUIPC
+  uunit.io.isAuipc := io.isAuipc  // U-type 的 AUIPC
+
   // 最终输出 result 先给一个默认
   val defaultRes = Wire(UInt(32.W))
   defaultRes := 0.U
@@ -250,7 +257,7 @@ class EXU extends Module {
     val reg_rs1       = Input(UInt(32.W))
     val reg_rs2       = Input(UInt(32.W))
     val pc            = Input(UInt(32.W))
-
+     val isAuipc   = Input(Bool())
     // 输出：
     val result_out    = Output(UInt(32.W))  // R/I-arith/Load/Store/U-type 的结果
     val branch_taken  = Output(Bool())      // Branch 条件
@@ -267,7 +274,7 @@ class EXU extends Module {
   alu.io.reg_rs2 := io.reg_rs2
   alu.io.imm     := io.imm.asUInt
   alu.io.pc      := io.pc
-
+  alu.io.isAuipc := io.isAuipc
   // —— 2. BranchUnit 实例化
   val branchUnit = Module(new BranchUnit)
   branchUnit.io.in1    := io.reg_rs1

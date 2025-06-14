@@ -47,26 +47,54 @@ extern "C" void interrupt_halt() {
     fflush(stdout);
     std::exit(code);
 }
-extern "C" uint32_t pmem_read(uint32_t raddr) {
-  assert(pmem && "pmem not initialized");
-  // raddr 是物理地址，先算出偏移
-  int idx = raddr - PMEM_BASE;
-  assert(idx >= 0 && idx + 3 < PMEM_SIZE);
-  // 小端拼接 4 字节
-  uint32_t v =  (uint32_t)pmem[idx]
-              | ((uint32_t)pmem[idx + 1] << 8)
-              | ((uint32_t)pmem[idx + 2] << 16)
-              | ((uint32_t)pmem[idx + 3] << 24);
-  return (int)v;
+extern "C" uint32_t pmem_read(int raddr) {
+  // 对齐
+  uint32_t addr = raddr & ~0x3u;
+
+  // 先检查：必须在 [PMEM_BASE, PMEM_BASE+PMEM_SIZE−4] 之间
+  if (addr < PMEM_BASE || addr + 3 >= PMEM_BASE + PMEM_SIZE) {
+    uint32_t pc = sim_top->rootp->top__DOT__pc;
+    printf("=== pmem_read out of bounds ===\n");
+    printf("  PC       = 0x%08x\n", pc);
+    printf("  read addr= 0x%08x (aligned 0x%08x)\n", raddr, addr);
+    printf("  valid range = [0x%08x, 0x%08x]\n",
+           PMEM_BASE, PMEM_BASE + PMEM_SIZE - 4);
+    fflush(stdout);
+    if (tfp) {
+  tfp->flush();
+  tfp->close();
+}
+    assert(false && "pmem_read: address out of range");
+
+  }
+
+  // 既然走到这里，addr >= PMEM_BASE 且 addr+3 < PMEM_BASE+PMEM_SIZE
+  size_t idx = addr - PMEM_BASE;   // 这时不会 underflow
+  return  (uint32_t)pmem[idx]
+        | ((uint32_t)pmem[idx + 1] << 8)
+        | ((uint32_t)pmem[idx + 2] << 16)
+        | ((uint32_t)pmem[idx + 3] << 24);
 }
 
-extern "C" void pmem_write(int waddr, int wdata, unsigned char wmask) {
-  assert(pmem && "pmem not initialized");
-  int idx = waddr - PMEM_BASE;
-  assert(idx >= 0 && idx + 3 < PMEM_SIZE);
-  // 按 Byte 掩码写入
-  if (wmask & 0x1) pmem[idx    ] =  wdata        & 0xFF;
-  if (wmask & 0x2) pmem[idx + 1] = (wdata >>  8) & 0xFF;
-  if (wmask & 0x4) pmem[idx + 2] = (wdata >> 16) & 0xFF;
-  if (wmask & 0x8) pmem[idx + 3] = (wdata >> 24) & 0xFF;
+
+extern "C" void pmem_write(int waddr, int wdata, int wmask) {
+  // —— 1. 越界检查 ——  
+  if (waddr < PMEM_BASE || waddr >= PMEM_BASE + PMEM_SIZE) {
+    uint32_t pc = sim_top->rootp->top__DOT__pc;
+    printf("=== pmem_write out of bounds ===\n");
+    printf("  PC        = 0x%08x\n", pc);
+    printf("  write addr= 0x%08x\n", waddr);
+    printf("  valid range = [0x%08x, 0x%08x]\n",
+           PMEM_BASE, PMEM_BASE + PMEM_SIZE - 1);
+    fflush(stdout);
+    if (tfp) { tfp->flush(); tfp->close(); }
+    assert(false && "pmem_write: address out of range");
+  }
+
+  // —— 2. 直接按字节写 ——  
+  // Verilog 已经对 waddr 做偏移、对 wdata 做了 >>，这里只需要把低 8 位写入即可  
+  size_t idx = waddr - PMEM_BASE;
+  pmem[idx] = (uint8_t)(wdata & 0xFF);
 }
+
+

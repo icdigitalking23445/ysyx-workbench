@@ -11,6 +11,7 @@
 
 #define DIFFTEST_SO  "/home/weiyaoli/Documents/ysyx-workbench/npc/csrc/riscv32-nemu-interpreter-so" 
 #define DIFFTEST_PORT 1234
+static uint64_t sim_time_ = 3;
 void (*difftest_memcpy) (uint32_t, void*, size_t, bool) = NULL;
 void (*difftest_regcpy) (void*, bool dir)                 = NULL;
 void (*difftest_exec)   (uint64_t)                    = NULL;
@@ -78,8 +79,15 @@ static uint32_t read_dut_reg(int i) {
 static void step_dut() {
   sim_top->clock = 0;
   sim_top->eval();
+  if (tfp) {
+    tfp->dump(sim_time_++);    // 把当前 timepoint 写入波形
+  }
+
   sim_top->clock = 1;
   sim_top->eval();
+  if (tfp) {
+    tfp->dump(sim_time_++);    // 把当前 timepoint 写入波形
+  } 
 }
 void difftest(void) {
   printf("=== Entering differential test mode ===\n");
@@ -107,7 +115,7 @@ void difftest(void) {
     // —— DUT 执行 ——  
     step_dut();
     instr_cnt++;
-
+    //difftest_memcpy(PMEM_BASE, pmem, PMEM_SIZE, DIFFTEST_TO_REF);
     // —— REF 执行 ——  
     difftest_exec(1);
 
@@ -128,6 +136,10 @@ void difftest(void) {
           "Difftest FAIL @ instr #%lu index %d: DUT=0x%08x REF=0x%08x PC=0x%08x\n",
           instr_cnt, i, dut_state[i], ref_state[i], sim_top->rootp->top__DOT__pc
         );
+        if (tfp) {
+  tfp->flush();
+  tfp->close();
+}
         exit(1);
       }
     }

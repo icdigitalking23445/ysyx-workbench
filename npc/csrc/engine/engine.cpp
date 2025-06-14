@@ -59,8 +59,8 @@ int engine_start(int argc, char **argv) {
   // —— 3. 复位脉冲 ——  
   sim_top->reset = 1;
   for (int cycle = 0; cycle < 2; cycle++) {
-    sim_top->clock = 0; sim_top->eval(); tfp->dump(2*cycle + 0);
-    sim_top->clock = 1; sim_top->eval(); tfp->dump(2*cycle + 1);
+    sim_top->clock = 0; sim_top->eval(); 
+    sim_top->clock = 1; sim_top->eval(); 
   }
   fprintf(stderr, "pc starts at  0x%08x\n", sim_top->rootp->top__DOT__pc);
   sim_top->reset = 0;

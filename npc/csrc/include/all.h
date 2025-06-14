@@ -40,8 +40,8 @@ void interrupt_halt(void);
 void illegal_halt(void);
 
 // 仿真时读取指令／访存
-uint32_t pmem_read(uint32_t addr);
-
+uint32_t pmem_read(int addr);
+void pmem_write(int waddr, int wdata, int wmask);
 #ifdef __cplusplus
 }
 #endif

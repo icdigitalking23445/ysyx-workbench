@@ -16,6 +16,7 @@ class IDU extends Module {
     //val pc_sel = Output(UInt(2.W)) // PC selection signal
     val IsIllegal = Output(Bool()) // Illegal instruction flag
     val IsInterrupt = Output(Bool()) // Interrupt instruction flag
+    val isAuipc    = Output(Bool())
   })
   // Set pc_sel based on instruction type
   //io.pc_sel := MuxLookup(inst(6, 0), 0.U(2.W), Seq(
@@ -28,11 +29,10 @@ class IDU extends Module {
   io.IsIllegal := Mux(io.TYpe === "b1000".U,true.B, false.B) // Default to not illegal
 
   io.IsInterrupt := Mux(io.TYpe === "b1001".U,true.B,false.B) // Default to not interrupt
-
   val rawInst = io.instruction
   val inst = Wire(UInt(32.W))
   inst := Mux(rawInst === 0.U,  0x00000013.U,  rawInst)
-
+  io.isAuipc := inst(6,0) === "b0010111".U
   io.TYpe := MuxLookup(inst(6, 0), "b1000".U, Seq(
     "b0110011".U -> "b0000".U, // R-type
     "b0000011".U -> "b0001".U, // I-type (Load)
@@ -49,7 +49,7 @@ class IDU extends Module {
     io.rs1 := MuxLookup(io.TYpe, 0.U(5.W), Seq(
         "b0000".U -> inst(19, 15), // R-type
         "b0001".U -> inst(19, 15), // I-type (Load)
-        "b0010".U -> inst(24, 20), // S-type (Store)
+        "b0010".U -> inst(19, 15), // S-type (Store)
         "b0011".U -> inst(19, 15), // B-type (Branch)
         "b0100".U -> inst(19, 15), // I-type (Immediate)
         "b0101".U -> 0.U, // U-type (LUI) - no rs1
@@ -59,9 +59,9 @@ class IDU extends Module {
     io.rs2 := MuxLookup(io.TYpe, 0.U(5.W), Seq(
         "b0000".U -> inst(24, 20), // R-type
         "b0001".U -> 0.U, // I-type (Load) - no rs2
-        "b0010".U -> inst(19, 15), // S-type (Store)
-        "b0011".U -> 0.U, // B-type (Branch) - no rs2
-        "b0100".U -> inst(24, 20), // I-type (Immediate)
+        "b0010".U -> inst(24,20), // S-type (Store)
+        "b0011".U -> inst(24,20), 
+        "b0100".U -> 0.U, // I-type (Immediate)
         "b0101".U -> 0.U, // U-type (LUI) - no rs2
         "b0110".U -> 0.U,  // J-type (JAL) - no rs2
         "b0111".U -> 0.U // I-type (JALR, treated as Immediate - no rs2

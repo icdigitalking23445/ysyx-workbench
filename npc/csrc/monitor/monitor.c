@@ -75,14 +75,14 @@ void init_monitor(int argc, char **argv) {
     // --- 半周期：时钟拉低 ---  
     sim_top->clock = 0;
     sim_top->eval();
-    if (tfp) tfp->dump(sim_time++);
+   
 
     // 这里不再写 io_instruction，硬件 IFU 会自动从 DPI-C 取指
 
     // --- 半周期：时钟拉高 ---  
     sim_top->clock = 1;
     sim_top->eval();
-    if (tfp) tfp->dump(sim_time++);
+    
 
     if (itrace_mode) {
       // 从 PC 调用 pmem_read，以便打印取到的指令

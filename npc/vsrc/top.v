@@ -1,8 +1,10 @@
 module IFU(
+  input         clock,
   input  [31:0] io_pc,
   input         io_valid,
   output [31:0] io_inst
 );
+  wire  pmem_clock; // @[ifu.scala 20:20]
   wire  pmem_valid; // @[ifu.scala 20:20]
   wire  pmem_wen; // @[ifu.scala 20:20]
   wire [3:0] pmem_wmask; // @[ifu.scala 20:20]
@@ -11,6 +13,7 @@ module IFU(
   wire [31:0] pmem_wdata; // @[ifu.scala 20:20]
   wire [31:0] pmem_rdata; // @[ifu.scala 20:20]
   Pmem pmem ( // @[ifu.scala 20:20]
+    .clock(pmem_clock),
     .valid(pmem_valid),
     .wen(pmem_wen),
     .wmask(pmem_wmask),
@@ -20,6 +23,7 @@ module IFU(
     .rdata(pmem_rdata)
   );
   assign io_inst = pmem_rdata; // @[ifu.scala 33:11]
+  assign pmem_clock = clock; // @[ifu.scala 21:17]
   assign pmem_valid = io_valid; // @[ifu.scala 23:17]
   assign pmem_wen = 1'h0; // @[ifu.scala 24:17]
   assign pmem_wmask = 4'h0; // @[ifu.scala 25:17]
@@ -37,7 +41,8 @@ module IDU(
   output [31:0] io_imm,
   output [3:0]  io_TYpe,
   output        io_IsIllegal,
-  output        io_IsInterrupt
+  output        io_IsInterrupt,
+  output        io_isAuipc
 );
   wire [31:0] inst = io_instruction == 32'h0 ? 32'h13 : io_instruction; // @[IDU.scala 34:14]
   wire [3:0] _io_TYpe_T_2 = 7'h33 == inst[6:0] ? 4'h0 : 4'h8; // @[Mux.scala 81:58]
@@ -51,16 +56,16 @@ module IDU(
   wire [3:0] _io_TYpe_T_18 = 7'h67 == inst[6:0] ? 4'h7 : _io_TYpe_T_16; // @[Mux.scala 81:58]
   wire [4:0] _io_rs1_T_7 = 4'h0 == io_TYpe ? inst[19:15] : 5'h0; // @[Mux.scala 81:58]
   wire [4:0] _io_rs1_T_9 = 4'h1 == io_TYpe ? inst[19:15] : _io_rs1_T_7; // @[Mux.scala 81:58]
-  wire [4:0] _io_rs1_T_11 = 4'h2 == io_TYpe ? inst[24:20] : _io_rs1_T_9; // @[Mux.scala 81:58]
+  wire [4:0] _io_rs1_T_11 = 4'h2 == io_TYpe ? inst[19:15] : _io_rs1_T_9; // @[Mux.scala 81:58]
   wire [4:0] _io_rs1_T_13 = 4'h3 == io_TYpe ? inst[19:15] : _io_rs1_T_11; // @[Mux.scala 81:58]
   wire [4:0] _io_rs1_T_15 = 4'h4 == io_TYpe ? inst[19:15] : _io_rs1_T_13; // @[Mux.scala 81:58]
   wire [4:0] _io_rs1_T_17 = 4'h5 == io_TYpe ? 5'h0 : _io_rs1_T_15; // @[Mux.scala 81:58]
   wire [4:0] _io_rs1_T_19 = 4'h6 == io_TYpe ? 5'h0 : _io_rs1_T_17; // @[Mux.scala 81:58]
   wire [4:0] _io_rs2_T_4 = 4'h0 == io_TYpe ? inst[24:20] : 5'h0; // @[Mux.scala 81:58]
   wire [4:0] _io_rs2_T_6 = 4'h1 == io_TYpe ? 5'h0 : _io_rs2_T_4; // @[Mux.scala 81:58]
-  wire [4:0] _io_rs2_T_8 = 4'h2 == io_TYpe ? inst[19:15] : _io_rs2_T_6; // @[Mux.scala 81:58]
-  wire [4:0] _io_rs2_T_10 = 4'h3 == io_TYpe ? 5'h0 : _io_rs2_T_8; // @[Mux.scala 81:58]
-  wire [4:0] _io_rs2_T_12 = 4'h4 == io_TYpe ? inst[24:20] : _io_rs2_T_10; // @[Mux.scala 81:58]
+  wire [4:0] _io_rs2_T_8 = 4'h2 == io_TYpe ? inst[24:20] : _io_rs2_T_6; // @[Mux.scala 81:58]
+  wire [4:0] _io_rs2_T_10 = 4'h3 == io_TYpe ? inst[24:20] : _io_rs2_T_8; // @[Mux.scala 81:58]
+  wire [4:0] _io_rs2_T_12 = 4'h4 == io_TYpe ? 5'h0 : _io_rs2_T_10; // @[Mux.scala 81:58]
   wire [4:0] _io_rs2_T_14 = 4'h5 == io_TYpe ? 5'h0 : _io_rs2_T_12; // @[Mux.scala 81:58]
   wire [4:0] _io_rs2_T_16 = 4'h6 == io_TYpe ? 5'h0 : _io_rs2_T_14; // @[Mux.scala 81:58]
   wire [4:0] _io_rd_T_7 = 4'h0 == io_TYpe ? inst[11:7] : 5'h0; // @[Mux.scala 81:58]
@@ -91,8 +96,9 @@ module IDU(
   assign io_funct7 = inst[31:25]; // @[IDU.scala 105:22]
   assign io_imm = 4'h7 == io_TYpe ? $signed(_io_imm_T_5) : $signed(_io_imm_T_59); // @[Mux.scala 81:58]
   assign io_TYpe = 7'h73 == inst[6:0] ? 4'h9 : _io_TYpe_T_18; // @[Mux.scala 81:58]
-  assign io_IsIllegal = io_TYpe == 4'h8; // @[IDU.scala 28:31]
-  assign io_IsInterrupt = io_TYpe == 4'h9; // @[IDU.scala 30:33]
+  assign io_IsIllegal = io_TYpe == 4'h8; // @[IDU.scala 29:31]
+  assign io_IsInterrupt = io_TYpe == 4'h9; // @[IDU.scala 31:33]
+  assign io_isAuipc = inst[6:0] == 7'h17; // @[IDU.scala 35:27]
 endmodule
 module RegFile(
   input         clock,
@@ -631,39 +637,41 @@ module ALU(
   input  [31:0] io_reg_rs2,
   input  [31:0] io_imm,
   input  [31:0] io_pc,
+  input         io_isAuipc,
   output [31:0] io_result
 );
-  wire [31:0] addR_io_a; // @[EXU.scala 163:22]
-  wire [31:0] addR_io_b; // @[EXU.scala 163:22]
-  wire [31:0] addR_io_sum; // @[EXU.scala 163:22]
-  wire [31:0] subR_io_a; // @[EXU.scala 167:22]
-  wire [31:0] subR_io_b; // @[EXU.scala 167:22]
-  wire [31:0] subR_io_diff; // @[EXU.scala 167:22]
-  wire [31:0] shftr_io_in; // @[EXU.scala 171:22]
-  wire [4:0] shftr_io_shamt; // @[EXU.scala 171:22]
-  wire [2:0] shftr_io_funct3; // @[EXU.scala 171:22]
-  wire [6:0] shftr_io_funct7; // @[EXU.scala 171:22]
-  wire [31:0] shftr_io_out; // @[EXU.scala 171:22]
-  wire [31:0] logicU_io_in1; // @[EXU.scala 177:22]
-  wire [31:0] logicU_io_in2; // @[EXU.scala 177:22]
-  wire [2:0] logicU_io_funct3; // @[EXU.scala 177:22]
-  wire [31:0] logicU_io_out; // @[EXU.scala 177:22]
-  wire [31:0] addI_io_a; // @[EXU.scala 198:22]
-  wire [31:0] addI_io_b; // @[EXU.scala 198:22]
-  wire [31:0] addI_io_sum; // @[EXU.scala 198:22]
-  wire [31:0] addrAdd_io_a; // @[EXU.scala 214:23]
-  wire [31:0] addrAdd_io_b; // @[EXU.scala 214:23]
-  wire [31:0] addrAdd_io_sum; // @[EXU.scala 214:23]
-  wire [31:0] uunit_io_imm; // @[EXU.scala 219:21]
-  wire [31:0] uunit_io_pc; // @[EXU.scala 219:21]
-  wire  uunit_io_isAuipc; // @[EXU.scala 219:21]
-  wire [31:0] uunit_io_out; // @[EXU.scala 219:21]
-  wire [31:0] _rtypeRes_T_1 = io_funct7[5] ? subR_io_diff : addR_io_sum; // @[EXU.scala 184:20]
-  wire  _rtypeRes_T_4 = $signed(io_reg_rs1) < $signed(io_reg_rs2); // @[EXU.scala 186:36]
-  wire  _rtypeRes_T_5 = io_reg_rs1 < io_reg_rs2; // @[EXU.scala 187:29]
-  wire [31:0] _rtypeRes_T_10 = $signed(io_reg_rs1) >>> io_reg_rs2[4:0]; // @[EXU.scala 190:47]
-  wire [31:0] _rtypeRes_T_12 = io_reg_rs1 >> io_reg_rs2[4:0]; // @[EXU.scala 191:19]
-  wire [31:0] _rtypeRes_T_13 = io_funct7[5] ? _rtypeRes_T_10 : _rtypeRes_T_12; // @[EXU.scala 189:20]
+  wire [31:0] addR_io_a; // @[EXU.scala 164:22]
+  wire [31:0] addR_io_b; // @[EXU.scala 164:22]
+  wire [31:0] addR_io_sum; // @[EXU.scala 164:22]
+  wire [31:0] subR_io_a; // @[EXU.scala 168:22]
+  wire [31:0] subR_io_b; // @[EXU.scala 168:22]
+  wire [31:0] subR_io_diff; // @[EXU.scala 168:22]
+  wire [31:0] shftr_io_in; // @[EXU.scala 172:22]
+  wire [4:0] shftr_io_shamt; // @[EXU.scala 172:22]
+  wire [2:0] shftr_io_funct3; // @[EXU.scala 172:22]
+  wire [6:0] shftr_io_funct7; // @[EXU.scala 172:22]
+  wire [31:0] shftr_io_out; // @[EXU.scala 172:22]
+  wire [31:0] logicU_io_in1; // @[EXU.scala 179:22]
+  wire [31:0] logicU_io_in2; // @[EXU.scala 179:22]
+  wire [2:0] logicU_io_funct3; // @[EXU.scala 179:22]
+  wire [31:0] logicU_io_out; // @[EXU.scala 179:22]
+  wire [31:0] addI_io_a; // @[EXU.scala 200:22]
+  wire [31:0] addI_io_b; // @[EXU.scala 200:22]
+  wire [31:0] addI_io_sum; // @[EXU.scala 200:22]
+  wire [31:0] addrAdd_io_a; // @[EXU.scala 220:23]
+  wire [31:0] addrAdd_io_b; // @[EXU.scala 220:23]
+  wire [31:0] addrAdd_io_sum; // @[EXU.scala 220:23]
+  wire [31:0] uunit_io_imm; // @[EXU.scala 225:21]
+  wire [31:0] uunit_io_pc; // @[EXU.scala 225:21]
+  wire  uunit_io_isAuipc; // @[EXU.scala 225:21]
+  wire [31:0] uunit_io_out; // @[EXU.scala 225:21]
+  wire  isIShift = io_TYpe == 4'h4 & (io_funct3 == 3'h1 | io_funct3 == 3'h5); // @[EXU.scala 174:42]
+  wire [31:0] _rtypeRes_T_1 = io_funct7[5] ? subR_io_diff : addR_io_sum; // @[EXU.scala 186:20]
+  wire  _rtypeRes_T_4 = $signed(io_reg_rs1) < $signed(io_reg_rs2); // @[EXU.scala 188:36]
+  wire  _rtypeRes_T_5 = io_reg_rs1 < io_reg_rs2; // @[EXU.scala 189:29]
+  wire [31:0] _rtypeRes_T_10 = $signed(io_reg_rs1) >>> io_reg_rs2[4:0]; // @[EXU.scala 192:47]
+  wire [31:0] _rtypeRes_T_12 = io_reg_rs1 >> io_reg_rs2[4:0]; // @[EXU.scala 193:19]
+  wire [31:0] _rtypeRes_T_13 = io_funct7[5] ? _rtypeRes_T_10 : _rtypeRes_T_12; // @[EXU.scala 191:20]
   wire [31:0] _rtypeRes_T_15 = 3'h1 == io_funct3 ? shftr_io_out : _rtypeRes_T_1; // @[Mux.scala 81:58]
   wire [31:0] _rtypeRes_T_17 = 3'h2 == io_funct3 ? {{31'd0}, _rtypeRes_T_4} : _rtypeRes_T_15; // @[Mux.scala 81:58]
   wire [31:0] _rtypeRes_T_19 = 3'h3 == io_funct3 ? {{31'd0}, _rtypeRes_T_5} : _rtypeRes_T_17; // @[Mux.scala 81:58]
@@ -671,17 +679,18 @@ module ALU(
   wire [31:0] _rtypeRes_T_23 = 3'h5 == io_funct3 ? _rtypeRes_T_13 : _rtypeRes_T_21; // @[Mux.scala 81:58]
   wire [31:0] _rtypeRes_T_25 = 3'h6 == io_funct3 ? logicU_io_out : _rtypeRes_T_23; // @[Mux.scala 81:58]
   wire [31:0] rtypeRes = 3'h7 == io_funct3 ? logicU_io_out : _rtypeRes_T_25; // @[Mux.scala 81:58]
-  wire  _itypeRes_T_2 = $signed(io_reg_rs1) < $signed(io_imm); // @[EXU.scala 205:36]
-  wire  _itypeRes_T_3 = io_reg_rs1 < io_imm; // @[EXU.scala 206:29]
-  wire [31:0] _itypeRes_T_4 = io_reg_rs1 ^ io_imm; // @[EXU.scala 207:29]
-  wire [31:0] _itypeRes_T_5 = io_reg_rs1 | io_imm; // @[EXU.scala 208:29]
-  wire [31:0] _itypeRes_T_6 = io_reg_rs1 & io_imm; // @[EXU.scala 209:29]
-  wire [31:0] _itypeRes_T_8 = 3'h0 == io_funct3 ? addI_io_sum : 32'h0; // @[Mux.scala 81:58]
+  wire  _itypeRes_T_2 = $signed(io_reg_rs1) < $signed(io_imm); // @[EXU.scala 210:36]
+  wire  _itypeRes_T_3 = io_reg_rs1 < io_imm; // @[EXU.scala 211:29]
+  wire [31:0] _itypeRes_T_4 = io_reg_rs1 ^ io_imm; // @[EXU.scala 212:29]
+  wire [31:0] _itypeRes_T_5 = io_reg_rs1 | io_imm; // @[EXU.scala 214:29]
+  wire [31:0] _itypeRes_T_6 = io_reg_rs1 & io_imm; // @[EXU.scala 215:29]
+  wire [31:0] _itypeRes_T_8 = 3'h1 == io_funct3 ? shftr_io_out : addI_io_sum; // @[Mux.scala 81:58]
   wire [31:0] _itypeRes_T_10 = 3'h2 == io_funct3 ? {{31'd0}, _itypeRes_T_2} : _itypeRes_T_8; // @[Mux.scala 81:58]
   wire [31:0] _itypeRes_T_12 = 3'h3 == io_funct3 ? {{31'd0}, _itypeRes_T_3} : _itypeRes_T_10; // @[Mux.scala 81:58]
   wire [31:0] _itypeRes_T_14 = 3'h4 == io_funct3 ? _itypeRes_T_4 : _itypeRes_T_12; // @[Mux.scala 81:58]
-  wire [31:0] _itypeRes_T_16 = 3'h6 == io_funct3 ? _itypeRes_T_5 : _itypeRes_T_14; // @[Mux.scala 81:58]
-  wire [31:0] itypeRes = 3'h7 == io_funct3 ? _itypeRes_T_6 : _itypeRes_T_16; // @[Mux.scala 81:58]
+  wire [31:0] _itypeRes_T_16 = 3'h5 == io_funct3 ? shftr_io_out : _itypeRes_T_14; // @[Mux.scala 81:58]
+  wire [31:0] _itypeRes_T_18 = 3'h6 == io_funct3 ? _itypeRes_T_5 : _itypeRes_T_16; // @[Mux.scala 81:58]
+  wire [31:0] itypeRes = 3'h7 == io_funct3 ? _itypeRes_T_6 : _itypeRes_T_18; // @[Mux.scala 81:58]
   wire [31:0] _io_result_T_1 = 4'h0 == io_TYpe ? rtypeRes : 32'h0; // @[Mux.scala 81:58]
   wire [31:0] _io_result_T_3 = 4'h1 == io_TYpe ? addrAdd_io_sum : _io_result_T_1; // @[Mux.scala 81:58]
   wire [31:0] _io_result_T_5 = 4'h2 == io_TYpe ? addrAdd_io_sum : _io_result_T_3; // @[Mux.scala 81:58]
@@ -689,64 +698,64 @@ module ALU(
   wire [31:0] _io_result_T_9 = 4'h4 == io_TYpe ? itypeRes : _io_result_T_7; // @[Mux.scala 81:58]
   wire [31:0] _io_result_T_11 = 4'h5 == io_TYpe ? uunit_io_out : _io_result_T_9; // @[Mux.scala 81:58]
   wire [31:0] _io_result_T_13 = 4'h6 == io_TYpe ? 32'h0 : _io_result_T_11; // @[Mux.scala 81:58]
-  Adder32 addR ( // @[EXU.scala 163:22]
+  Adder32 addR ( // @[EXU.scala 164:22]
     .io_a(addR_io_a),
     .io_b(addR_io_b),
     .io_sum(addR_io_sum)
   );
-  Sub32 subR ( // @[EXU.scala 167:22]
+  Sub32 subR ( // @[EXU.scala 168:22]
     .io_a(subR_io_a),
     .io_b(subR_io_b),
     .io_diff(subR_io_diff)
   );
-  Shifter shftr ( // @[EXU.scala 171:22]
+  Shifter shftr ( // @[EXU.scala 172:22]
     .io_in(shftr_io_in),
     .io_shamt(shftr_io_shamt),
     .io_funct3(shftr_io_funct3),
     .io_funct7(shftr_io_funct7),
     .io_out(shftr_io_out)
   );
-  LogicUnit logicU ( // @[EXU.scala 177:22]
+  LogicUnit logicU ( // @[EXU.scala 179:22]
     .io_in1(logicU_io_in1),
     .io_in2(logicU_io_in2),
     .io_funct3(logicU_io_funct3),
     .io_out(logicU_io_out)
   );
-  Adder32 addI ( // @[EXU.scala 198:22]
+  Adder32 addI ( // @[EXU.scala 200:22]
     .io_a(addI_io_a),
     .io_b(addI_io_b),
     .io_sum(addI_io_sum)
   );
-  Adder32 addrAdd ( // @[EXU.scala 214:23]
+  Adder32 addrAdd ( // @[EXU.scala 220:23]
     .io_a(addrAdd_io_a),
     .io_b(addrAdd_io_b),
     .io_sum(addrAdd_io_sum)
   );
-  UTypeUnit uunit ( // @[EXU.scala 219:21]
+  UTypeUnit uunit ( // @[EXU.scala 225:21]
     .io_imm(uunit_io_imm),
     .io_pc(uunit_io_pc),
     .io_isAuipc(uunit_io_isAuipc),
     .io_out(uunit_io_out)
   );
   assign io_result = 4'h7 == io_TYpe ? 32'h0 : _io_result_T_13; // @[Mux.scala 81:58]
-  assign addR_io_a = io_reg_rs1; // @[EXU.scala 164:14]
-  assign addR_io_b = io_reg_rs2; // @[EXU.scala 165:14]
-  assign subR_io_a = io_reg_rs1; // @[EXU.scala 168:14]
-  assign subR_io_b = io_reg_rs2; // @[EXU.scala 169:14]
-  assign shftr_io_in = io_reg_rs1; // @[EXU.scala 172:19]
-  assign shftr_io_shamt = io_reg_rs2[4:0]; // @[EXU.scala 173:32]
-  assign shftr_io_funct3 = io_funct3; // @[EXU.scala 174:19]
-  assign shftr_io_funct7 = io_funct7; // @[EXU.scala 175:19]
-  assign logicU_io_in1 = io_reg_rs1; // @[EXU.scala 178:20]
-  assign logicU_io_in2 = io_reg_rs2; // @[EXU.scala 179:20]
-  assign logicU_io_funct3 = io_funct3; // @[EXU.scala 180:20]
-  assign addI_io_a = io_reg_rs1; // @[EXU.scala 199:14]
-  assign addI_io_b = io_imm; // @[EXU.scala 200:14]
-  assign addrAdd_io_a = io_reg_rs1; // @[EXU.scala 215:16]
-  assign addrAdd_io_b = io_imm; // @[EXU.scala 216:16]
-  assign uunit_io_imm = io_imm; // @[EXU.scala 220:20]
-  assign uunit_io_pc = io_pc; // @[EXU.scala 221:20]
-  assign uunit_io_isAuipc = io_TYpe == 4'h5; // @[EXU.scala 223:32]
+  assign addR_io_a = io_reg_rs1; // @[EXU.scala 165:14]
+  assign addR_io_b = io_reg_rs2; // @[EXU.scala 166:14]
+  assign subR_io_a = io_reg_rs1; // @[EXU.scala 169:14]
+  assign subR_io_b = io_reg_rs2; // @[EXU.scala 170:14]
+  assign shftr_io_in = io_reg_rs1; // @[EXU.scala 173:19]
+  assign shftr_io_shamt = isIShift ? io_imm[4:0] : io_reg_rs2[4:0]; // @[EXU.scala 175:25]
+  assign shftr_io_funct3 = io_funct3; // @[EXU.scala 176:19]
+  assign shftr_io_funct7 = io_funct7; // @[EXU.scala 177:19]
+  assign logicU_io_in1 = io_reg_rs1; // @[EXU.scala 180:20]
+  assign logicU_io_in2 = io_reg_rs2; // @[EXU.scala 181:20]
+  assign logicU_io_funct3 = io_funct3; // @[EXU.scala 182:20]
+  assign addI_io_a = io_reg_rs1; // @[EXU.scala 201:14]
+  assign addI_io_b = io_imm; // @[EXU.scala 202:14]
+  assign addrAdd_io_a = io_reg_rs1; // @[EXU.scala 221:16]
+  assign addrAdd_io_b = io_imm; // @[EXU.scala 222:16]
+  assign uunit_io_imm = io_imm; // @[EXU.scala 226:20]
+  assign uunit_io_pc = io_pc; // @[EXU.scala 227:20]
+  assign uunit_io_isAuipc = io_isAuipc; // @[EXU.scala 229:20]
 endmodule
 module Comparator(
   input  [31:0] io_in1,
@@ -839,36 +848,38 @@ module EXU(
   input  [31:0] io_reg_rs1,
   input  [31:0] io_reg_rs2,
   input  [31:0] io_pc,
+  input         io_isAuipc,
   output [31:0] io_result_out,
   output        io_branch_taken,
   output [31:0] io_branch_target,
   output [31:0] io_jump_target
 );
-  wire [2:0] alu_io_funct3; // @[EXU.scala 262:19]
-  wire [6:0] alu_io_funct7; // @[EXU.scala 262:19]
-  wire [3:0] alu_io_TYpe; // @[EXU.scala 262:19]
-  wire [31:0] alu_io_reg_rs1; // @[EXU.scala 262:19]
-  wire [31:0] alu_io_reg_rs2; // @[EXU.scala 262:19]
-  wire [31:0] alu_io_imm; // @[EXU.scala 262:19]
-  wire [31:0] alu_io_pc; // @[EXU.scala 262:19]
-  wire [31:0] alu_io_result; // @[EXU.scala 262:19]
-  wire [31:0] branchUnit_io_in1; // @[EXU.scala 272:26]
-  wire [31:0] branchUnit_io_in2; // @[EXU.scala 272:26]
-  wire [2:0] branchUnit_io_funct3; // @[EXU.scala 272:26]
-  wire [31:0] branchUnit_io_pc; // @[EXU.scala 272:26]
-  wire [31:0] branchUnit_io_imm; // @[EXU.scala 272:26]
-  wire  branchUnit_io_taken; // @[EXU.scala 272:26]
-  wire [31:0] branchUnit_io_branch_target; // @[EXU.scala 272:26]
-  wire [31:0] jumpUnit_io_pc; // @[EXU.scala 280:24]
-  wire [31:0] jumpUnit_io_rs1; // @[EXU.scala 280:24]
-  wire [31:0] jumpUnit_io_imm; // @[EXU.scala 280:24]
-  wire  jumpUnit_io_isJal; // @[EXU.scala 280:24]
-  wire [31:0] jumpUnit_io_jump_pc; // @[EXU.scala 280:24]
-  wire [31:0] _GEN_0 = 4'h7 == io_TYpe ? jumpUnit_io_jump_pc : 32'h0; // @[EXU.scala 293:19 291:20 304:22]
-  wire [31:0] _GEN_1 = 4'h7 == io_TYpe ? jumpUnit_io_jump_pc : alu_io_result; // @[EXU.scala 293:19 288:20 305:22]
-  wire [31:0] _GEN_2 = 4'h6 == io_TYpe ? jumpUnit_io_jump_pc : _GEN_0; // @[EXU.scala 293:19 300:22]
-  wire [31:0] _GEN_3 = 4'h6 == io_TYpe ? jumpUnit_io_jump_pc : _GEN_1; // @[EXU.scala 293:19 301:22]
-  ALU alu ( // @[EXU.scala 262:19]
+  wire [2:0] alu_io_funct3; // @[EXU.scala 269:19]
+  wire [6:0] alu_io_funct7; // @[EXU.scala 269:19]
+  wire [3:0] alu_io_TYpe; // @[EXU.scala 269:19]
+  wire [31:0] alu_io_reg_rs1; // @[EXU.scala 269:19]
+  wire [31:0] alu_io_reg_rs2; // @[EXU.scala 269:19]
+  wire [31:0] alu_io_imm; // @[EXU.scala 269:19]
+  wire [31:0] alu_io_pc; // @[EXU.scala 269:19]
+  wire  alu_io_isAuipc; // @[EXU.scala 269:19]
+  wire [31:0] alu_io_result; // @[EXU.scala 269:19]
+  wire [31:0] branchUnit_io_in1; // @[EXU.scala 279:26]
+  wire [31:0] branchUnit_io_in2; // @[EXU.scala 279:26]
+  wire [2:0] branchUnit_io_funct3; // @[EXU.scala 279:26]
+  wire [31:0] branchUnit_io_pc; // @[EXU.scala 279:26]
+  wire [31:0] branchUnit_io_imm; // @[EXU.scala 279:26]
+  wire  branchUnit_io_taken; // @[EXU.scala 279:26]
+  wire [31:0] branchUnit_io_branch_target; // @[EXU.scala 279:26]
+  wire [31:0] jumpUnit_io_pc; // @[EXU.scala 287:24]
+  wire [31:0] jumpUnit_io_rs1; // @[EXU.scala 287:24]
+  wire [31:0] jumpUnit_io_imm; // @[EXU.scala 287:24]
+  wire  jumpUnit_io_isJal; // @[EXU.scala 287:24]
+  wire [31:0] jumpUnit_io_jump_pc; // @[EXU.scala 287:24]
+  wire [31:0] _GEN_0 = 4'h7 == io_TYpe ? jumpUnit_io_jump_pc : 32'h0; // @[EXU.scala 300:19 298:20 311:22]
+  wire [31:0] _GEN_1 = 4'h7 == io_TYpe ? jumpUnit_io_jump_pc : alu_io_result; // @[EXU.scala 300:19 295:20 312:22]
+  wire [31:0] _GEN_2 = 4'h6 == io_TYpe ? jumpUnit_io_jump_pc : _GEN_0; // @[EXU.scala 300:19 307:22]
+  wire [31:0] _GEN_3 = 4'h6 == io_TYpe ? jumpUnit_io_jump_pc : _GEN_1; // @[EXU.scala 300:19 308:22]
+  ALU alu ( // @[EXU.scala 269:19]
     .io_funct3(alu_io_funct3),
     .io_funct7(alu_io_funct7),
     .io_TYpe(alu_io_TYpe),
@@ -876,9 +887,10 @@ module EXU(
     .io_reg_rs2(alu_io_reg_rs2),
     .io_imm(alu_io_imm),
     .io_pc(alu_io_pc),
+    .io_isAuipc(alu_io_isAuipc),
     .io_result(alu_io_result)
   );
-  BranchUnit branchUnit ( // @[EXU.scala 272:26]
+  BranchUnit branchUnit ( // @[EXU.scala 279:26]
     .io_in1(branchUnit_io_in1),
     .io_in2(branchUnit_io_in2),
     .io_funct3(branchUnit_io_funct3),
@@ -887,33 +899,34 @@ module EXU(
     .io_taken(branchUnit_io_taken),
     .io_branch_target(branchUnit_io_branch_target)
   );
-  JumpUnit jumpUnit ( // @[EXU.scala 280:24]
+  JumpUnit jumpUnit ( // @[EXU.scala 287:24]
     .io_pc(jumpUnit_io_pc),
     .io_rs1(jumpUnit_io_rs1),
     .io_imm(jumpUnit_io_imm),
     .io_isJal(jumpUnit_io_isJal),
     .io_jump_pc(jumpUnit_io_jump_pc)
   );
-  assign io_result_out = 4'h3 == io_TYpe ? {{31'd0}, branchUnit_io_taken} : _GEN_3; // @[EXU.scala 293:19 297:24]
-  assign io_branch_taken = 4'h3 == io_TYpe & branchUnit_io_taken; // @[EXU.scala 293:19 289:20 295:24]
-  assign io_branch_target = 4'h3 == io_TYpe ? branchUnit_io_branch_target : 32'h0; // @[EXU.scala 293:19 290:20 296:24]
-  assign io_jump_target = 4'h3 == io_TYpe ? 32'h0 : _GEN_2; // @[EXU.scala 293:19 291:20]
-  assign alu_io_funct3 = io_funct3; // @[EXU.scala 263:18]
-  assign alu_io_funct7 = io_funct7; // @[EXU.scala 264:18]
-  assign alu_io_TYpe = io_TYpe; // @[EXU.scala 265:18]
-  assign alu_io_reg_rs1 = io_reg_rs1; // @[EXU.scala 266:18]
-  assign alu_io_reg_rs2 = io_reg_rs2; // @[EXU.scala 267:18]
-  assign alu_io_imm = io_imm; // @[EXU.scala 268:28]
-  assign alu_io_pc = io_pc; // @[EXU.scala 269:18]
-  assign branchUnit_io_in1 = io_reg_rs1; // @[EXU.scala 273:24]
-  assign branchUnit_io_in2 = io_reg_rs2; // @[EXU.scala 274:24]
-  assign branchUnit_io_funct3 = io_funct3; // @[EXU.scala 275:24]
-  assign branchUnit_io_pc = io_pc; // @[EXU.scala 276:24]
-  assign branchUnit_io_imm = io_imm; // @[EXU.scala 277:34]
-  assign jumpUnit_io_pc = io_pc; // @[EXU.scala 281:21]
-  assign jumpUnit_io_rs1 = io_reg_rs1; // @[EXU.scala 282:21]
-  assign jumpUnit_io_imm = io_imm; // @[EXU.scala 283:31]
-  assign jumpUnit_io_isJal = io_TYpe == 4'h6; // @[EXU.scala 284:33]
+  assign io_result_out = 4'h3 == io_TYpe ? {{31'd0}, branchUnit_io_taken} : _GEN_3; // @[EXU.scala 300:19 304:24]
+  assign io_branch_taken = 4'h3 == io_TYpe & branchUnit_io_taken; // @[EXU.scala 300:19 296:20 302:24]
+  assign io_branch_target = 4'h3 == io_TYpe ? branchUnit_io_branch_target : 32'h0; // @[EXU.scala 300:19 297:20 303:24]
+  assign io_jump_target = 4'h3 == io_TYpe ? 32'h0 : _GEN_2; // @[EXU.scala 300:19 298:20]
+  assign alu_io_funct3 = io_funct3; // @[EXU.scala 270:18]
+  assign alu_io_funct7 = io_funct7; // @[EXU.scala 271:18]
+  assign alu_io_TYpe = io_TYpe; // @[EXU.scala 272:18]
+  assign alu_io_reg_rs1 = io_reg_rs1; // @[EXU.scala 273:18]
+  assign alu_io_reg_rs2 = io_reg_rs2; // @[EXU.scala 274:18]
+  assign alu_io_imm = io_imm; // @[EXU.scala 275:28]
+  assign alu_io_pc = io_pc; // @[EXU.scala 276:18]
+  assign alu_io_isAuipc = io_isAuipc; // @[EXU.scala 277:18]
+  assign branchUnit_io_in1 = io_reg_rs1; // @[EXU.scala 280:24]
+  assign branchUnit_io_in2 = io_reg_rs2; // @[EXU.scala 281:24]
+  assign branchUnit_io_funct3 = io_funct3; // @[EXU.scala 282:24]
+  assign branchUnit_io_pc = io_pc; // @[EXU.scala 283:24]
+  assign branchUnit_io_imm = io_imm; // @[EXU.scala 284:34]
+  assign jumpUnit_io_pc = io_pc; // @[EXU.scala 288:21]
+  assign jumpUnit_io_rs1 = io_reg_rs1; // @[EXU.scala 289:21]
+  assign jumpUnit_io_imm = io_imm; // @[EXU.scala 290:31]
+  assign jumpUnit_io_isJal = io_TYpe == 4'h6; // @[EXU.scala 291:33]
 endmodule
 module top(
   input   clock,
@@ -923,6 +936,7 @@ module top(
   reg [31:0] _RAND_0;
   reg [31:0] _RAND_1;
 `endif // RANDOMIZE_REG_INIT
+  wire  ifu_clock; // @[top.scala 16:19]
   wire [31:0] ifu_io_pc; // @[top.scala 16:19]
   wire  ifu_io_valid; // @[top.scala 16:19]
   wire [31:0] ifu_io_inst; // @[top.scala 16:19]
@@ -936,6 +950,7 @@ module top(
   wire [3:0] idu_io_TYpe; // @[top.scala 21:27]
   wire  idu_io_IsIllegal; // @[top.scala 21:27]
   wire  idu_io_IsInterrupt; // @[top.scala 21:27]
+  wire  idu_io_isAuipc; // @[top.scala 21:27]
   wire  regFile_clock; // @[top.scala 22:27]
   wire  regFile_reset; // @[top.scala 22:27]
   wire [4:0] regFile_io_rs1; // @[top.scala 22:27]
@@ -952,12 +967,14 @@ module top(
   wire [31:0] exu_io_reg_rs1; // @[top.scala 23:27]
   wire [31:0] exu_io_reg_rs2; // @[top.scala 23:27]
   wire [31:0] exu_io_pc; // @[top.scala 23:27]
+  wire  exu_io_isAuipc; // @[top.scala 23:27]
   wire [31:0] exu_io_result_out; // @[top.scala 23:27]
   wire  exu_io_branch_taken; // @[top.scala 23:27]
   wire [31:0] exu_io_branch_target; // @[top.scala 23:27]
   wire [31:0] exu_io_jump_target; // @[top.scala 23:27]
   wire  dpiHandlers_IsIllegal; // @[top.scala 24:27]
   wire  dpiHandlers_IsInterrupt; // @[top.scala 24:27]
+  wire  pmemD_clock; // @[top.scala 42:21]
   wire  pmemD_valid; // @[top.scala 42:21]
   wire  pmemD_wen; // @[top.scala 42:21]
   wire [3:0] pmemD_wmask; // @[top.scala 42:21]
@@ -968,16 +985,33 @@ module top(
   reg [31:0] pc; // @[top.scala 11:24]
   wire [31:0] pcPlus4 = pc + 32'h4; // @[top.scala 12:20]
   reg  valid; // @[top.scala 13:22]
-  wire  isLoad = idu_io_TYpe == 4'h1; // @[top.scala 43:29]
-  wire  isStore = idu_io_TYpe == 4'h2; // @[top.scala 44:29]
-  wire [1:0] _pmemD_io_wmask_T_3 = 3'h1 == idu_io_funct3 ? 2'h3 : {{1'd0}, 3'h0 == idu_io_funct3}; // @[Mux.scala 81:58]
-  wire  isBranch = idu_io_TYpe == 4'h3; // @[top.scala 58:30]
-  wire  isJal = idu_io_TYpe == 4'h6; // @[top.scala 59:30]
-  wire  isJalr = idu_io_TYpe == 4'h7; // @[top.scala 60:30]
+  wire  isLoad = idu_io_TYpe == 4'h1; // @[top.scala 44:29]
+  wire  isStore = idu_io_TYpe == 4'h2; // @[top.scala 45:29]
+  wire [3:0] _pmemD_io_wmask_T_1 = 3'h0 == idu_io_funct3 ? 4'h1 : 4'h0; // @[Mux.scala 81:58]
+  wire [3:0] _pmemD_io_wmask_T_3 = 3'h1 == idu_io_funct3 ? 4'h3 : _pmemD_io_wmask_T_1; // @[Mux.scala 81:58]
+  wire [1:0] byteOffset = pmemD_raddr[1:0]; // @[top.scala 61:32]
+  wire [5:0] _byteOff_T = byteOffset * 4'h8; // @[top.scala 62:42]
+  wire [31:0] byteOff = pmemD_rdata >> _byteOff_T; // @[top.scala 62:27]
+  wire [15:0] halfOff = byteOff[15:0]; // @[top.scala 63:49]
+  wire [23:0] _lbValue_T_2 = byteOff[7] ? 24'hffffff : 24'h0; // @[Bitwise.scala 74:12]
+  wire [31:0] lbValue = {_lbValue_T_2,byteOff[7:0]}; // @[Cat.scala 31:58]
+  wire [31:0] lbuValue = {24'h0,byteOff[7:0]}; // @[Cat.scala 31:58]
+  wire [15:0] _lhValue_T_2 = halfOff[15] ? 16'hffff : 16'h0; // @[Bitwise.scala 74:12]
+  wire [31:0] lhValue = {_lhValue_T_2,halfOff}; // @[Cat.scala 31:58]
+  wire [31:0] lhuValue = {16'h0,halfOff}; // @[Cat.scala 31:58]
+  wire [31:0] _loadData_T_1 = 3'h0 == idu_io_funct3 ? lbValue : 32'h0; // @[Mux.scala 81:58]
+  wire [31:0] _loadData_T_3 = 3'h4 == idu_io_funct3 ? lbuValue : _loadData_T_1; // @[Mux.scala 81:58]
+  wire [31:0] _loadData_T_5 = 3'h1 == idu_io_funct3 ? lhValue : _loadData_T_3; // @[Mux.scala 81:58]
+  wire [31:0] _loadData_T_7 = 3'h5 == idu_io_funct3 ? lhuValue : _loadData_T_5; // @[Mux.scala 81:58]
+  wire [31:0] loadData = 3'h2 == idu_io_funct3 ? pmemD_rdata : _loadData_T_7; // @[Mux.scala 81:58]
+  wire  isBranch = idu_io_TYpe == 4'h3; // @[top.scala 78:30]
+  wire  isJal = idu_io_TYpe == 4'h6; // @[top.scala 79:30]
+  wire  isJalr = idu_io_TYpe == 4'h7; // @[top.scala 80:30]
   wire [31:0] _writeData_T = isJalr ? pcPlus4 : exu_io_result_out; // @[Mux.scala 101:16]
   wire [31:0] _writeData_T_1 = isJal ? pcPlus4 : _writeData_T; // @[Mux.scala 101:16]
-  wire [31:0] branchTarget = exu_io_branch_taken ? exu_io_branch_target : pcPlus4; // @[top.scala 77:25]
+  wire [31:0] branchTarget = exu_io_branch_taken ? exu_io_branch_target : pcPlus4; // @[top.scala 96:25]
   IFU ifu ( // @[top.scala 16:19]
+    .clock(ifu_clock),
     .io_pc(ifu_io_pc),
     .io_valid(ifu_io_valid),
     .io_inst(ifu_io_inst)
@@ -992,7 +1026,8 @@ module top(
     .io_imm(idu_io_imm),
     .io_TYpe(idu_io_TYpe),
     .io_IsIllegal(idu_io_IsIllegal),
-    .io_IsInterrupt(idu_io_IsInterrupt)
+    .io_IsInterrupt(idu_io_IsInterrupt),
+    .io_isAuipc(idu_io_isAuipc)
   );
   RegFile regFile ( // @[top.scala 22:27]
     .clock(regFile_clock),
@@ -1013,6 +1048,7 @@ module top(
     .io_reg_rs1(exu_io_reg_rs1),
     .io_reg_rs2(exu_io_reg_rs2),
     .io_pc(exu_io_pc),
+    .io_isAuipc(exu_io_isAuipc),
     .io_result_out(exu_io_result_out),
     .io_branch_taken(exu_io_branch_taken),
     .io_branch_target(exu_io_branch_target),
@@ -1023,6 +1059,7 @@ module top(
     .IsInterrupt(dpiHandlers_IsInterrupt)
   );
   Pmem pmemD ( // @[top.scala 42:21]
+    .clock(pmemD_clock),
     .valid(pmemD_valid),
     .wen(pmemD_wen),
     .wmask(pmemD_wmask),
@@ -1031,6 +1068,7 @@ module top(
     .wdata(pmemD_wdata),
     .rdata(pmemD_rdata)
   );
+  assign ifu_clock = clock;
   assign ifu_io_pc = pc; // @[top.scala 17:13]
   assign ifu_io_valid = valid; // @[top.scala 19:16]
   assign idu_io_instruction = ifu_io_inst; // @[top.scala 26:22]
@@ -1038,9 +1076,9 @@ module top(
   assign regFile_reset = reset;
   assign regFile_io_rs1 = idu_io_rs1; // @[top.scala 27:22]
   assign regFile_io_rs2 = idu_io_rs2; // @[top.scala 28:22]
-  assign regFile_io_rd = idu_io_rd; // @[top.scala 74:26]
-  assign regFile_io_writeData = isLoad ? pmemD_rdata : _writeData_T_1; // @[Mux.scala 101:16]
-  assign regFile_io_writeEnable = ~isBranch & ~isStore & ~idu_io_IsIllegal & ~idu_io_IsInterrupt; // @[top.scala 63:53]
+  assign regFile_io_rd = idu_io_rd; // @[top.scala 93:26]
+  assign regFile_io_writeData = isLoad ? loadData : _writeData_T_1; // @[Mux.scala 101:16]
+  assign regFile_io_writeEnable = ~isBranch & ~isStore & ~idu_io_IsIllegal & ~idu_io_IsInterrupt; // @[top.scala 83:53]
   assign exu_io_funct3 = idu_io_funct3; // @[top.scala 30:19]
   assign exu_io_funct7 = idu_io_funct7; // @[top.scala 31:19]
   assign exu_io_imm = idu_io_imm; // @[top.scala 35:19]
@@ -1048,14 +1086,16 @@ module top(
   assign exu_io_reg_rs1 = regFile_io_regData1; // @[top.scala 33:19]
   assign exu_io_reg_rs2 = regFile_io_regData2; // @[top.scala 34:19]
   assign exu_io_pc = pc; // @[top.scala 36:19]
+  assign exu_io_isAuipc = idu_io_isAuipc; // @[top.scala 37:19]
   assign dpiHandlers_IsIllegal = idu_io_IsIllegal; // @[top.scala 38:30]
   assign dpiHandlers_IsInterrupt = idu_io_IsInterrupt; // @[top.scala 39:30]
-  assign pmemD_valid = isLoad | isStore; // @[top.scala 46:28]
-  assign pmemD_wen = idu_io_TYpe == 4'h2; // @[top.scala 44:29]
-  assign pmemD_wmask = 3'h2 == idu_io_funct3 ? 4'hf : {{2'd0}, _pmemD_io_wmask_T_3}; // @[Mux.scala 81:58]
-  assign pmemD_raddr = exu_io_result_out; // @[top.scala 53:18]
-  assign pmemD_waddr = exu_io_result_out; // @[top.scala 54:18]
-  assign pmemD_wdata = regFile_io_regData2; // @[top.scala 55:18]
+  assign pmemD_clock = clock; // @[top.scala 43:17]
+  assign pmemD_valid = isLoad | isStore; // @[top.scala 47:28]
+  assign pmemD_wen = idu_io_TYpe == 4'h2; // @[top.scala 45:29]
+  assign pmemD_wmask = 3'h2 == idu_io_funct3 ? 4'hf : _pmemD_io_wmask_T_3; // @[Mux.scala 81:58]
+  assign pmemD_raddr = exu_io_result_out; // @[top.scala 55:16]
+  assign pmemD_waddr = exu_io_result_out; // @[top.scala 56:16]
+  assign pmemD_wdata = regFile_io_regData2; // @[top.scala 46:18]
   always @(posedge clock) begin
     if (reset) begin // @[top.scala 11:24]
       pc <= 32'h80000000; // @[top.scala 11:24]
